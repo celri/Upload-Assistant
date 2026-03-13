@@ -5,7 +5,7 @@ Release Notes for version v7.1.1 (2026-03-13):
 
 #
 # ### NOTE:
-# - Bugix release
+# - Bugfix release
 # - webui health endpoint now has a rate limit of 70 requests per hour.
 #
 # ---
@@ -2642,4 +2642,4 @@ __version__ = "3.5.3.1"
 # The historical __version__ assignments above (one per
 # release-notes block) are kept for reference.  The *real*
 # runtime version must come last so it wins at import time.
-__version__ = "v7.1.0"
+__version__ = "v7.1.1"
