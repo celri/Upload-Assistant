@@ -101,6 +101,8 @@ class NST(FrenchTrackerMixin, UNIT3D):
             "WEBDL": "4",
             "WEBRIP": "5",
             "HDTV": "6",
+            "ISO": "7",
+            "DVDRIP": "8",
         }
         if mapping_only:
             return type_id
@@ -377,41 +379,74 @@ class NST(FrenchTrackerMixin, UNIT3D):
     def _detect_nst_langue(meta: dict[str, Any]) -> str:
         """Derive the NST langue tag from the release name / audio metadata.
 
-        NST accepts: Français, VF, VFF, VFI, VFQ.
-        FrenchTrackerMixin embeds VFF/VFQ/VFI/VF/VF2/VF3/VOF etc. in the name.
+        NST accepts: Français, VFF, VFI, VFQ, VOSTFR, VFSTFR, Multi, Muet, Anglais.
         """
-        name = meta.get("name", "")
-        upper = name.upper()
+        name = meta.get("uuid") or meta.get("name", "")  # More precise on UUID, UA remove Multi etc when forging name
+        upper = name.upper().replace(" ", ".")
+        langs = []
 
-        # Exact VF variant tags embedded by FrenchTrackerMixin
-        for tag in ("VFF", "VFQ", "VFI"):
-            if f".{tag}." in upper or upper.endswith(f".{tag}"):
-                return tag
+        # New regex
+        if re.search(r"(?:^|\.)(TRUEFRENCH|FRENCH|VOF|VOB|VOQ|VF\S*)(?:\.|$)", upper):
+            langs.append("Français")
 
-        # Generic VF with optional digits (VF, VF2, VF3, VF4 …) → "VF"
-        if re.search(r"\.VF\d*(\.|$)", upper):
-            return "VF"
+        if re.search(r"(?:^|\.)(VF\d|VFF)(?:\.|$)", upper):
+            langs.append("VFF")
 
-        # VOF (original French) → Français
-        if ".VOF." in upper or upper.endswith(".VOF"):
-            return "Français"
+        if re.search(r"(?:^|\.)(VFI)(?:\.|$)", upper):
+            langs.append("VFI")
 
-        # Generic FRENCH / TRUEFRENCH tag → Français
-        if ".FRENCH." in upper or upper.endswith(".FRENCH"):
-            return "Français"
-        if ".TRUEFRENCH." in upper or upper.endswith(".TRUEFRENCH"):
-            return "Français"
+        if re.search(r"(?:^|\.)(VFQ)(?:\.|$)", upper):
+            langs.append("VFQ")
 
-        # MULTI with a VF variant → extract it; plain MULTI → VF
-        if ".MULTI." in upper or upper.startswith("MULTI.") or upper.endswith(".MULTI"):
-            for tag in ("VFF", "VFQ", "VFI"):
-                if f".{tag}." in upper or upper.endswith(f".{tag}"):
-                    return tag
-            return "VF"
+        if re.search(r"(?:^|\.)(VOSTFR)(?:\.|$)", upper):
+            langs.append("VOSTFR")
 
-        # Fallback: inspect audio_languages
-        fr_aliases = {"french", "français", "francais", "fra", "fre", "fr", "fr-fr", "fr-ca", "fr-be", "fr-ch", "fr-qc"}
-        raw_audio = [lang.lower().strip() for lang in (meta.get("audio_languages") or [])]
-        if any(la in fr_aliases for la in raw_audio):
-            return "Français"
-        return ""
+        if re.search(r"(?:^|\.)(VFSTFR)(?:\.|$)", upper):
+            langs.append("VFSTFR")
+
+        if re.search(r"(?:^|\.)(MULTI)(?:\.|$)", upper):
+            langs.append("Multi")
+
+        if re.search(r"(?:^|\.)(MUTE|MUET)(?:\.|$)", upper):
+            langs.append("Muet")
+
+        # Fallback: inspect Mediainfo
+
+        tracks = meta.get("mediainfo", {}).get("media", {}).get("track", [])
+        langs_mi = [t for t in tracks if t.get("@type") == "Audio"]
+        langs_all = langs_mi if langs_mi else (meta.get("audio_languages") or [])  # Ultimate fallback
+
+        fr_aliases = {"french", "français", "francais", "fra", "fre", "fr", "fr-fr"}
+        qc_aliases = {"fr-ca", "qc", "fr-qc"}
+        be_aliases = {"fr-be", "be"}
+        en_aliases = {"english", "eng", "en", "en-us", "en-gb"}
+
+        detected_langs = set()
+
+        for t in langs_all:
+            lang = (t.get("Language") or "").lower().strip() if langs_mi else t.lower().strip()
+            if lang in qc_aliases:
+                detected_langs.add("VFQ")
+            elif lang in be_aliases:
+                detected_langs.add("VFF")  # franco-belge -> VFF
+            elif lang in fr_aliases:
+                detected_langs.add("Français")
+            elif lang in en_aliases:
+                detected_langs.add("Anglais")
+            else:
+                detected_langs.add("Autre")
+
+        # MULTI if more than one audiotrack
+        if len(langs_all) > 1 and "Multi" not in langs and "Autre" in detected_langs:
+            langs.append("Multi")
+
+        # Add tag if not already inside
+        for tag in ("VFF", "VFQ", "Français", "Anglais"):
+            if tag in detected_langs and tag not in langs:
+                langs.append(tag)
+
+        # If Anglais without Multi, return empty
+        if "Anglais" in detected_langs and "Multi" not in langs:
+            return ""
+
+        return ", ".join(langs)
