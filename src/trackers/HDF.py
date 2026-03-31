@@ -994,7 +994,7 @@ class HDF(FrenchTrackerMixin):
             upload_cookies=self.session.cookies,
             upload_url=self.upload_url,
             id_pattern=r"torrentid=([a-fA-F0-9]+)",
-            success_text="torrents.php?id=",
+            success_text="torrents.php?torrentid=",
         )
 
         return is_uploaded
