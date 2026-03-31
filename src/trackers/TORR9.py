@@ -1018,7 +1018,8 @@ class TORR9(FrenchTrackerMixin):
                             if meta.get("debug"):
                                 console.print(f"[dim]TORR9 dupe skip (title mismatch): {name}[/dim]")
                             continue
-                        if year_str and year_str not in name:
+                        # TV torrents typically use S01E01 format and omit the year
+                        if year_str and year_str not in name and meta.get("category") != "TV":
                             if meta.get("debug"):
                                 console.print(f"[dim]TORR9 dupe skip (year mismatch): {name}[/dim]")
                             continue
