@@ -824,9 +824,6 @@ class HDF(FrenchTrackerMixin):
         # Language flags
         lang_flags = self._compute_language_flags(meta, audio_tag)
 
-        # Description
-        description = await self._build_description(meta)
-
         # MediaInfo text
         mi_text = await self._get_mediainfo_text(meta)
 
@@ -904,7 +901,6 @@ class HDF(FrenchTrackerMixin):
             "media": self._get_file_type(meta),
             "team": team,
             "release_desc": mi_text,
-            "album_desc": description,
             "image": poster,
         }
 
