@@ -299,6 +299,7 @@ class Args:
         parser.add_argument("-hc", "--hardcoded-subs", action="store_true", required=False, help="Contains hardcoded subs", dest="hardcoded_subs")
         parser.add_argument("-pr", "--personalrelease", action="store_true", required=False, help="Personal Release")
         parser.add_argument("-sdc", "--skip-dupe-check", action="store_true", required=False, help="Ignore dupes and upload anyway (Skips dupe check)", dest="dupe")
+        parser.add_argument("-svf", "--skip-vf-check", action="store_true", required=False, help="Skip French audio (VF) requirement check on HDF", dest="skip_vf_check")
         parser.add_argument(
             "-sda", "--skip-dupe-asking", action="store_true", required=False, help="Don't prompt about dupes, just treat dupes as actual dupes", dest="ask_dupe"
         )

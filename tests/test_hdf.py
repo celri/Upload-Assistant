@@ -939,12 +939,25 @@ class TestAdditionalChecks:
     def hdf(self):
         return HDF(_config())
 
-    def test_always_passes_even_without_french_audio(self, hdf):
-        """HDF does NOT require French audio — check must not block."""
+    def test_blocks_without_french_audio_unattended(self, hdf):
+        """HDF requires French audio — blocks in unattended mode without skip flag."""
         meta = _meta_base(
             mediainfo={"media": {"track": [
                 {"@type": "Audio", "Language": "en"},
             ]}},
+            unattended=True,
+        )
+        assert _run(hdf.get_additional_checks(meta)) is False
+        assert meta.get("skipping") == "HDF"
+
+    def test_skips_vf_check_with_flag(self, hdf):
+        """--skip-vf-check bypasses the French audio requirement."""
+        meta = _meta_base(
+            mediainfo={"media": {"track": [
+                {"@type": "Audio", "Language": "en"},
+            ]}},
+            unattended=True,
+            skip_vf_check=True,
         )
         assert _run(hdf.get_additional_checks(meta)) is True
 

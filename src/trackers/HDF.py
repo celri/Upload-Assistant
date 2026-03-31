@@ -17,6 +17,7 @@ from datetime import datetime
 from typing import Any, Optional, Union
 
 import aiofiles
+import cli_ui
 import httpx
 from bs4 import BeautifulSoup
 
@@ -233,6 +234,24 @@ class HDF(FrenchTrackerMixin):
     # ──────────────────────────────────────────────────────────
     #  Language checkboxes
     # ──────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _has_french_audio(meta: Meta) -> bool:
+        """Check whether at least one French audio track is present in MediaInfo."""
+        if "mediainfo" not in meta or "media" not in meta.get("mediainfo", {}):
+            return False
+        from src.trackers.FRENCH import FRENCH_LANG_VALUES
+
+        for track in meta["mediainfo"]["media"].get("track", []):
+            if track.get("@type") != "Audio":
+                continue
+            lang = str(track.get("Language", "")).lower().strip()
+            if lang in FRENCH_LANG_VALUES or lang.startswith("fr"):
+                return True
+            title = str(track.get("Title", "")).lower()
+            if "french" in title or "français" in title or "francais" in title:
+                return True
+        return False
 
     def _compute_language_flags(self, meta: Meta, audio_tag: str) -> dict[str, bool]:
         """Determine which language checkboxes to tick based on the audio tag."""
@@ -641,8 +660,8 @@ class HDF(FrenchTrackerMixin):
     _BLOAT_CHECK_TYPES = frozenset({"REMUX", "ENCODE", "WEBDL", "WEBRIP"})
 
     async def get_additional_checks(self, meta: Meta) -> bool:
-        """Check HDF rules: forbidden codecs, superfluous tracks, NFO generation."""
-        # AAC audio is forbidden on HDF
+        """Check HDF rules: forbidden codecs, French audio, superfluous tracks, NFO."""
+        # AAC audio is forbidden on HDF, except for commentary and audio description tracks
         mediainfo = meta.get("mediainfo") or {}
         media = mediainfo.get("media") if isinstance(mediainfo, dict) else {}
         all_tracks = (media.get("track") if isinstance(media, dict) else None) or []
@@ -651,9 +670,32 @@ class HDF(FrenchTrackerMixin):
                 continue
             fmt = str(track.get("Format", "")).strip().upper()
             if fmt == "AAC":
-                console.print(f"[bold red]{self.tracker}: Le codec AAC est interdit sur HD-Forever. Upload annulé.[/bold red]")
+                title = str(track.get("Title", "")).lower()
+                if any(kw in title for kw in ("comment", "audiodesc", "audio desc", "description")):
+                    continue
+                console.print(f"[bold red]{self.tracker}: Le codec AAC est interdit sur HD-Forever (sauf commentaires audio et audiodescription). Upload annulé.[/bold red]")
                 meta["skipping"] = self.tracker
                 return False
+
+        # French audio (VF) is mandatory — warn if not detected
+        has_french = self._has_french_audio(meta)
+        audio_tracks = [t for t in all_tracks if isinstance(t, dict) and t.get("@type") == "Audio"]
+        is_muet = len(audio_tracks) == 0
+        if not has_french and not is_muet:
+            console.print(
+                f"[bold yellow]{self.tracker}: Aucune piste audio française détectée. "
+                f"La VF est obligatoire sur HDF (sauf exceptions : film sans VF dispo, "
+                f"concerts, films muets, certains WEB-DL).[/bold yellow]"
+            )
+            if not meta.get("skip_vf_check", False):
+                if not meta.get("unattended", False):
+                    if not cli_ui.ask_yes_no(f"{self.tracker}: Continuer l'upload sans VF ?", default=False):
+                        meta["skipping"] = self.tracker
+                        return False
+                else:
+                    console.print(f"[bold red]{self.tracker}: Upload annulé (mode automatique sans '--skip-vf-check').[/bold red]")
+                    meta["skipping"] = self.tracker
+                    return False
 
         # Bloat detection (warning only — does not block upload)
         release_type = str(meta.get("type", "")).upper()
