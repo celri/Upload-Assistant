@@ -17,7 +17,6 @@ from datetime import datetime
 from typing import Any, Optional, Union
 
 import aiofiles
-import cli_ui
 import httpx
 from bs4 import BeautifulSoup
 
@@ -687,15 +686,6 @@ class HDF(FrenchTrackerMixin):
                 f"La VF est obligatoire sur HDF (sauf exceptions : film sans VF dispo, "
                 f"concerts, films muets, certains WEB-DL).[/bold yellow]"
             )
-            if not meta.get("skip_vf_check", False):
-                if not meta.get("unattended", False):
-                    if not cli_ui.ask_yes_no(f"{self.tracker}: Continuer l'upload sans VF ?", default=False):
-                        meta["skipping"] = self.tracker
-                        return False
-                else:
-                    console.print(f"[bold red]{self.tracker}: Upload annulé (mode automatique sans '--skip-vf-check').[/bold red]")
-                    meta["skipping"] = self.tracker
-                    return False
 
         # Bloat detection (warning only — does not block upload)
         release_type = str(meta.get("type", "")).upper()
