@@ -641,12 +641,20 @@ class HDF(FrenchTrackerMixin):
     _BLOAT_CHECK_TYPES = frozenset({"REMUX", "ENCODE", "WEBDL", "WEBRIP"})
 
     async def get_additional_checks(self, meta: Meta) -> bool:
-        """Warn about superfluous audio/subtitle tracks.
+        """Check HDF rules: forbidden codecs, superfluous tracks, NFO generation."""
+        # AAC audio is forbidden on HDF
+        mediainfo = meta.get("mediainfo") or {}
+        media = mediainfo.get("media") if isinstance(mediainfo, dict) else {}
+        all_tracks = (media.get("track") if isinstance(media, dict) else None) or []
+        for track in all_tracks:
+            if not isinstance(track, dict) or track.get("@type") != "Audio":
+                continue
+            fmt = str(track.get("Format", "")).strip().upper()
+            if fmt == "AAC":
+                console.print(f"[bold red]{self.tracker}: Le codec AAC est interdit sur HD-Forever. Upload annulé.[/bold red]")
+                meta["skipping"] = self.tracker
+                return False
 
-        HDF rules discourage excessive non-VF/VO tracks on
-        Remux/Encode/WEB releases.
-        This is a warning only — it never blocks the upload.
-        """
         # Bloat detection (warning only — does not block upload)
         release_type = str(meta.get("type", "")).upper()
         if release_type in self._BLOAT_CHECK_TYPES:
