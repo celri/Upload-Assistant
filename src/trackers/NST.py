@@ -369,6 +369,21 @@ class NST(FrenchTrackerMixin, UNIT3D):
         """
         nfo_files = self._get_nfo_files(meta)
         if nfo_files:
+            upload_torrent_path = os.path.join(meta["base_dir"], "tmp", meta["uuid"], f"[{self.tracker}].torrent")
+
+            # Reuse existing torrent if it already contains .nfo files
+            if os.path.exists(upload_torrent_path):
+                try:
+                    from torf import Torrent
+
+                    existing = Torrent.read(upload_torrent_path)
+                    has_nfo = any(str(f).endswith(".nfo") for f in existing.files)
+                    if has_nfo:
+                        meta["upload_torrent_path"] = upload_torrent_path
+                        return nfo_files[0]
+                except Exception:
+                    pass  # Fall through to recreation
+
             tracker_config = self.config["TRACKERS"].get(self.tracker, {})
             tracker_url = str(tracker_config.get("announce_url", "https://fake.tracker")).strip()
             torrent_create = f"[{self.tracker}]"
@@ -379,7 +394,6 @@ class NST(FrenchTrackerMixin, UNIT3D):
             if cooldown > 0:
                 await asyncio.sleep(cooldown)
             await TorrentCreator.create_torrent(meta, str(meta["path"]), torrent_create, tracker_url=tracker_url)
-            upload_torrent_path = os.path.join(meta["base_dir"], "tmp", meta["uuid"], f"[{self.tracker}].torrent")
             if not os.path.exists(upload_torrent_path):
                 raise FileNotFoundError(f"Failed to create {upload_torrent_path}")
             meta["upload_torrent_path"] = upload_torrent_path
