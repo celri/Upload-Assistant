@@ -1,5 +1,4 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-# import discord
 import asyncio
 import json
 import os
@@ -135,6 +134,7 @@ class ANT:
         return ""
 
     async def get_tags(self, meta: Meta) -> Union[list[str], str]:
+        meta["ant_user_tags"] = False
         no_tags = False
         tags: list[str] = []
         if meta.get("genres", []):
@@ -181,6 +181,7 @@ class ANT:
                     "[yellow]ANT api will accept this upload, but no tag will be added.\nYou must manually add at least one tag from the approved list when uploaded."
                 )
                 await asyncio.sleep(3)
+                meta["ant_user_tags"] = True
 
         if not tags:
             console.print(f"[yellow]{self.tracker}: No genres found for tagging. Tag required.")
@@ -190,6 +191,7 @@ class ANT:
             user_tag = cli_ui.ask_string("Please enter at least one tag (genre) to use for the upload", default="")
             if user_tag:
                 tags.append(user_tag.replace(" ", ".").lower())
+                meta["ant_user_tags"] = True
 
         return tags if not no_tags else ""
 
@@ -292,7 +294,7 @@ class ANT:
                 console.print("[bold red]Adult content detected[/bold red]")
                 if cli_ui.ask_yes_no("Are the screenshots safe?", default=False):
                     data.update({"screenshots": "\n".join([x["raw_url"] for x in meta["image_list"]][:4])})
-                    if tags == "":
+                    if not meta["ant_user_tags"]:
                         data.update({"flagchangereason": "Adult with screens uploaded with Upload Assistant"})
                     else:
                         data.update({"flagchangereason": "Adult with screens uploaded with Upload Assistant. User to add tags manually."})
@@ -302,7 +304,7 @@ class ANT:
                 data.update({"screenshots": ""})
         else:
             data.update({"screenshots": "\n".join([x["raw_url"] for x in meta["image_list"]][:4])})
-            if tags != "":
+            if meta["ant_user_tags"]:
                 data.update({"flagchangereason": "User prompted to add tags manually"})
 
         headers = {"User-Agent": f"Upload Assistant/2.4 ({platform.system()} {platform.release()})"}
