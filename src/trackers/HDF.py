@@ -914,6 +914,11 @@ class HDF(FrenchTrackerMixin):
         data["artists[]"] = artists_names
         data["importance[]"] = artists_roles
 
+        # Season selector (TV only) — S00 = specials, S01, S02, …
+        if is_tv:
+            season_int = meta.get("season_int", 0)
+            data["season"] = str(int(season_int)) if season_int else "0"
+
         # Scene checkbox
         if meta.get("scene", False):
             data["scene"] = "1"
