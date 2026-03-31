@@ -673,7 +673,9 @@ class DupeChecker:
             year = int(date_match.group(1))
             month = int(date_match.group(2))
             day = int(date_match.group(3))
-            daily_date_pattern = rf"(?<!\d){year}[.\-_/\s]?{month:02d}[.\-_/\s]?{day:02d}(?!\d)"
+            month_alt = f"(?:0?{month})" if month < 10 else str(month)
+            day_alt = f"(?:0?{day})" if day < 10 else str(day)
+            daily_date_pattern = rf"(?<!\d){year}[.\-_/\s]?{month_alt}[.\-_/\s]?{day_alt}(?!\d)"
             if re.search(daily_date_pattern, filename, re.IGNORECASE):
                 return (True, False)
             return (False, False)

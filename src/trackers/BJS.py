@@ -955,7 +955,7 @@ class BJS:
 
         return results
 
-    def get_runtime(self, meta: dict[str, Any]) -> dict[str, int]:
+    def get_runtime(self, meta: dict[str, Any]) -> tuple[int, int]:
         """
         Extracts runtime from metadata and converts total minutes into hours and minutes.
         """

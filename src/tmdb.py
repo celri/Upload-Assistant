@@ -1271,7 +1271,7 @@ async def tmdb_other_meta(
 
     # Get anime information if applicable
     filename = filename if category == "MOVIE" else path
-    mal_id, retrieved_aka, anime, demographic = await get_anime(media_data, {"title": title, "aka": retrieved_aka, "mal_id": 0, "filename": filename})
+    mal_id, retrieved_aka, anime, demographic, anilist_id = await get_anime(media_data, {"title": title, "aka": retrieved_aka, "mal_id": 0, "filename": filename})
 
     if mal_manual is not None and mal_manual != 0:
         mal_id = mal_manual
@@ -1303,6 +1303,7 @@ async def tmdb_other_meta(
         "tmdb_directors": directors,
         "tmdb_cast": cast,
         "mal_id": mal_id,
+        "anilist_id": anilist_id,
         "anime": anime,
         "demographic": demographic,
         "retrieved_aka": retrieved_aka,
@@ -1394,7 +1395,7 @@ async def get_directors(tmdb_id: int, category: str) -> list[str]:
             return []
 
 
-async def get_anime(response: dict[str, Any], meta: dict[str, Any]) -> tuple[int, str, bool, str]:
+async def get_anime(response: dict[str, Any], meta: dict[str, Any]) -> tuple[int, str, bool, str, int]:
     tmdb_name = meta["title"]
     alt_name = "" if meta.get("aka", "") == "" else meta["aka"]
     anime = False
@@ -1404,7 +1405,7 @@ async def get_anime(response: dict[str, Any], meta: dict[str, Any]) -> tuple[int
         if each["id"] == 16:
             animation = True
     if response["original_language"] == "ja" and animation is True:
-        romaji, mal_id, _eng_title, _season_year, _episodes, demographic = await get_romaji(
+        romaji, mal_id, _eng_title, _season_year, _episodes, demographic, anilist_id = await get_romaji(
             tmdb_name,
             meta.get("mal_id"),
             meta,
@@ -1416,12 +1417,13 @@ async def get_anime(response: dict[str, Any], meta: dict[str, Any]) -> tuple[int
         # mal_id = mal.results[0].mal_id
     else:
         mal_id = 0
+        anilist_id = 0
     if meta.get("mal_id", 0) != 0:
         mal_id = int(meta.get("mal_id", 0) or 0)
-    return mal_id, alt_name, anime, demographic
+    return mal_id, alt_name, anime, demographic, anilist_id
 
 
-async def get_romaji(tmdb_name: str, mal: Optional[int], meta: dict[str, Any]) -> tuple[str, int, str, str, int, str]:
+async def get_romaji(tmdb_name: str, mal: Optional[int], meta: dict[str, Any]) -> tuple[str, int, str, str, int, str, int]:
     media: list[dict[str, Any]] = []
     demographic = "Mina"  # Default to Mina if no tags are found
 
@@ -1493,6 +1495,7 @@ async def get_romaji(tmdb_name: str, mal: Optional[int], meta: dict[str, Any]) -
             try:
                 async with httpx.AsyncClient(timeout=30.0) as client:
                     response = await client.post(url, json={"query": query, "variables": variables})
+                response.raise_for_status()
                 json_data = typing_cast(dict[str, Any], response.json())
 
                 demographics = ["Shounen", "Seinen", "Shoujo", "Josei", "Kodomo", "Mina"]
@@ -1595,18 +1598,19 @@ async def get_romaji(tmdb_name: str, mal: Optional[int], meta: dict[str, Any]) -
         result_title = typing_cast(dict[str, Any], result.get("title", {}))
         romaji = str(result_title.get("romaji") or result_title.get("english") or "")
         mal_id = int(result.get("idMal", 0) or 0)
+        anilist_id = int(result.get("id", 0) or 0)
         eng_title = str(result_title.get("english") or result_title.get("romaji") or "")
         season_year_value = result.get("seasonYear", "")
         season_year = str(season_year_value) if season_year_value is not None else ""
         episodes = int(result.get("episodes", 0) or 0)
     else:
         romaji = eng_title = season_year = ""
-        episodes = mal_id = 0
+        episodes = mal_id = anilist_id = 0
     if mal not in (None, 0):
         mal_id = int(mal)
     if not episodes:
         episodes = 0
-    return romaji, mal_id, eng_title, season_year, episodes, demographic
+    return romaji, mal_id, eng_title, season_year, episodes, demographic, anilist_id
 
 
 async def get_tmdb_imdb_from_mediainfo(

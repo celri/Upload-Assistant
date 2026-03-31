@@ -3,6 +3,7 @@ import re
 from typing import Any, Optional, cast
 
 import langcodes
+from langcodes.tag_parser import LanguageTagError
 
 from src.console import console
 from src.languages import languages_manager
@@ -121,7 +122,7 @@ class LDU(UNIT3D):
                     if not await languages_manager.has_english_language(audio_language):
                         non_eng_audio = True
                     break
-                except (LookupError, AttributeError, ValueError) as e:
+                except (LanguageTagError, LookupError, AttributeError, ValueError) as e:
                     console.print(f"[bold red]Error extracting audio language: {e}[/bold red]")
 
         if meta.get("no_subs", False):
@@ -138,7 +139,7 @@ class LDU(UNIT3D):
                         lang = langcodes.find(subtitle_language).to_alpha3()
                         iso_subtitle = f"Subs {lang.upper()}"
                         break
-                    except (LookupError, AttributeError, ValueError) as e:
+                    except (LanguageTagError, LookupError, AttributeError, ValueError) as e:
                         console.print(f"[bold red]Error extracting subtitle language: {e}[/bold red]")
 
         if cat_id == "18" and iso_subtitle:

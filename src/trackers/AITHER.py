@@ -39,7 +39,7 @@ class AITHER(UNIT3D):
         return should_continue
 
     async def get_additional_data(self, meta: dict[str, Any]):
-        hdr_value = str(meta.get("hdr") or "")
+        hdr_value = str(meta.get("hdr") or "").upper()
         has_hdr10p = "HDR10+" in hdr_value
 
         data = {

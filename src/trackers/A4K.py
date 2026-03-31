@@ -97,29 +97,15 @@ class A4K(UNIT3D):
                                         console.print(f"Video bitrate too low: {bit_rate_kbps:.0f} kbps for A4K TV uploads.")
                                     return False
                             else:
-                                if not meta["unattended"] or (meta["unattended"] and meta.get("unattended_confirm", False)):
-                                    console.print(f"[bold red]Could not determine video bitrate from mediainfo for {self.tracker} upload.[/bold red]")
-                                    console.print("[yellow]Bitrate must be above 15000 kbps for movies and 10000 kbps for TV shows.[/yellow]")
-                                    if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                                        pass
-                                    else:
-                                        return False
-                        else:
-                            if not meta["unattended"] or (meta["unattended"] and meta.get("unattended_confirm", False)):
-                                console.print(f"[bold red]Could not determine video bitrate from mediainfo for {self.tracker} upload.[/bold red]")
-                                console.print("[yellow]Bitrate must be above 15000 kbps for movies and 10000 kbps for TV shows.[/yellow]")
-                                if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                                    pass
-                                else:
+                                if not self._confirm_unknown_bitrate(meta):
                                     return False
-                    else:
-                        if not meta["unattended"] or (meta["unattended"] and meta.get("unattended_confirm", False)):
-                            console.print(f"[bold red]Could not determine video bitrate from mediainfo for {self.tracker} upload.[/bold red]")
-                            console.print("[yellow]Bitrate must be above 15000 kbps for movies and 10000 kbps for TV shows.[/yellow]")
-                            if cli_ui.ask_yes_no("Do you want to upload anyway?", default=False):
-                                pass
-                            else:
+                        else:
+                            if not self._confirm_unknown_bitrate(meta):
                                 return False
+                    else:
+                        if not self._confirm_unknown_bitrate(meta):
+                            return False
+                    break  # Only check the first video track
 
         return should_continue
 
@@ -148,6 +134,13 @@ class A4K(UNIT3D):
             approved_image_hosts=self.approved_image_hosts,
         )
         return
+
+    def _confirm_unknown_bitrate(self, meta: dict[str, Any]) -> bool:
+        if not meta["unattended"] or (meta["unattended"] and meta.get("unattended_confirm", False)):
+            console.print(f"[bold red]Could not determine video bitrate from mediainfo for {self.tracker} upload.[/bold red]")
+            console.print("[yellow]Bitrate must be above 15000 kbps for movies and 10000 kbps for TV shows.[/yellow]")
+            return cli_ui.ask_yes_no("Do you want to upload anyway?", default=False)
+        return False
 
     async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
         a4k_name: str = meta["name"]

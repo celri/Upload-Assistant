@@ -224,7 +224,7 @@ class HDS:
                     if name and torrent_link:
                         dupes.append({"name": name, "size": size, "link": torrent_link})
 
-                next_page = soup.find("a", href=re.compile(r"pages="), text=re.compile(r"Next|>>", re.I))
+                next_page = soup.find("a", href=re.compile(r"pages="), string=re.compile(r"Next|>>", re.I))
 
                 if not next_page:
                     next_page = soup.find("a", href=re.compile(rf"pages={current_page + 1}"))

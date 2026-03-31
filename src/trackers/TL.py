@@ -335,8 +335,8 @@ class TL:
             "nonscene": "on" if not meta.get("scene") else "off",
         }
 
-        if meta.get("anime", False) and meta.get("mal_id", 0) != 0:
-            data.update({"animeid": f"https://anilist.co/anime/{meta.get('mal_id')}"})
+        if meta.get("anime", False) and meta.get("anilist_id", 0) != 0:
+            data.update({"animeid": f"https://anilist.co/anime/{meta.get('anilist_id')}"})
 
         else:
             if meta.get("category") == "MOVIE":

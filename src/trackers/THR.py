@@ -254,7 +254,7 @@ class THR:
         tmp_dir = os.path.join(str(meta["base_dir"]), "tmp", str(meta["uuid"]))
         image_patterns: list[str] = ["*.png", ".[!.]*.png"]
         for pattern in image_patterns:
-            image_glob.extend(glob.glob(os.path.join(tmp_dir, pattern)))
+            image_glob.extend(sorted(glob.glob(os.path.join(tmp_dir, pattern))))
 
         unwanted_patterns = ["FILE*", "PLAYLIST*", "POSTER*"]
         unwanted_files: set[str] = set()
@@ -297,9 +297,11 @@ class THR:
                     )
                     response.raise_for_status()
                     response_data = response.json()
-                    img_data = cast(dict[str, Any], response_data.get("image", {}))
-                    img_url = str(img_data.get("url", "")).strip()
-                    if not img_url:
+                    img_data = response_data.get("image") or {}
+                    if not isinstance(img_data, dict):
+                        img_data = {}
+                    img_url = str(img_data.get("url") or "").strip()
+                    if not img_url or img_url.lower() == "none":
                         raise KeyError("image.url")
                     image_list.append(img_url)
             except httpx.RequestError as exc:

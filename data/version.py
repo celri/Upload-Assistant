@@ -2689,4 +2689,4 @@ __version__ = "3.5.3.1"
 # The historical __version__ assignments above (one per
 # release-notes block) are kept for reference.  The *real*
 # runtime version must come last so it wins at import time.
-__version__ = "v7.1.1"
+__version__ = "v7.1.2"

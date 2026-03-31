@@ -50,7 +50,7 @@ class LUME(UNIT3D):
             else:
                 return False
 
-        if not meta.get("is_disc", False) and meta.get("container", "") != "mkv":
+        if meta["is_disc"] not in ["BDMV", "DVD"] and meta.get("container", "") != "mkv":
             console.print(f"[bold red]{self.tracker} only allows MKV containers for non-disc uploads.[/bold red]")
             return False
 
