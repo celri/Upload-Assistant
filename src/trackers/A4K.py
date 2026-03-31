@@ -76,33 +76,28 @@ class A4K(UNIT3D):
             tracks = meta.get("mediainfo", {}).get("media", {}).get("track", [])
             for track in tracks:
                 if track.get("@type") == "Video":
-                    encoding_settings = track.get("Encoded_Library_Settings", {})
+                    bit_rate = track.get("BitRate")
+                    if bit_rate:
+                        try:
+                            bit_rate_num = int(bit_rate)
+                        except (ValueError, TypeError):
+                            bit_rate_num = None
 
-                    if encoding_settings:
-                        bit_rate = track.get("BitRate")
-                        if bit_rate:
-                            try:
-                                bit_rate_num = int(bit_rate)
-                            except (ValueError, TypeError):
-                                bit_rate_num = None
-
-                            if bit_rate_num is not None:
-                                bit_rate_kbps = bit_rate_num / 1000
-                                if meta.get("category") == "MOVIE" and bit_rate_kbps < 15000:
-                                    if not meta.get("unattended", False):
-                                        console.print(f"Video bitrate too low: {bit_rate_kbps:.0f} kbps for A4K movie uploads.")
-                                    return False
-                                elif meta.get("category") == "TV" and bit_rate_kbps < 10000:
-                                    if not meta.get("unattended", False):
-                                        console.print(f"Video bitrate too low: {bit_rate_kbps:.0f} kbps for A4K TV uploads.")
-                                    return False
-                            else:
-                                if not self._confirm_unknown_bitrate(meta):
-                                    return False
+                        if bit_rate_num is not None:
+                            bit_rate_kbps = bit_rate_num / 1000
+                            if meta.get("category") == "MOVIE" and bit_rate_kbps < 15000:
+                                if not meta.get("unattended", False):
+                                    console.print(f"Video bitrate too low: {bit_rate_kbps:.0f} kbps for A4K movie uploads.")
+                                return False
+                            elif meta.get("category") == "TV" and bit_rate_kbps < 10000:
+                                if not meta.get("unattended", False):
+                                    console.print(f"Video bitrate too low: {bit_rate_kbps:.0f} kbps for A4K TV uploads.")
+                                return False
                         else:
                             if not self._confirm_unknown_bitrate(meta):
                                 return False
-                    else:
+                    elif meta["type"] == "ENCODE":
+                        # Encodes should always have a bitrate; WEB-DLs may use nominal/variable rates
                         if not self._confirm_unknown_bitrate(meta):
                             return False
                     break  # Only check the first video track

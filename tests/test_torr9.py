@@ -1107,6 +1107,39 @@ class TestDupeRelevanceFilter:
         assert 'Intouchables' in first_call.kwargs.get('params', {}).get('q', '')
         assert len(dupes) == 1
 
+    def test_tv_dupes_without_year_in_name(self):
+        """TV torrents whose names lack the year should still be detected as duplicates."""
+        t = TORR9(_config())
+        t._bearer_token = 'test-token'
+        meta = _meta_base(
+            category='TV',
+            title='Fais pas ci fais pas ça',
+            frtitle='Fais pas ci fais pas ça',
+            year='2007',
+            original_language='fr',
+        )
+
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = {
+            'torrents': [
+                {'title': 'Fais.pas.ci.fais.pas.ca.S02.FRENCH.1080p.WEB.AAC.2.0.H264-FW', 'id': 500, 'file_size_bytes': 8000000000},
+            ],
+            'total_count': 1,
+        }
+
+        with patch('httpx.AsyncClient') as MockClient:
+            client_instance = AsyncMock()
+            client_instance.get = AsyncMock(return_value=resp)
+            client_instance.__aenter__ = AsyncMock(return_value=client_instance)
+            client_instance.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value = client_instance
+
+            dupes = _run(t.search_existing(meta, ''))
+
+        assert len(dupes) == 1
+        assert dupes[0]['name'] == 'Fais.pas.ci.fais.pas.ca.S02.FRENCH.1080p.WEB.AAC.2.0.H264-FW'
+
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 #  _get_mediainfo_text fallback tests

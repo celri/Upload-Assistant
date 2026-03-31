@@ -543,8 +543,8 @@ class TestGetDataPayload:
         assert data["bitrate"] == "1080p"
         assert data["media"] == "WEB-DL"
 
-        # release_desc = MediaInfo (empty in test), album_desc = BBCode description
-        assert data.get("album_desc")
+        # album_desc is not sent — group info is staff-only on HDF
+        assert "album_desc" not in data
 
         # Language flags — _build_audio_string produces MULTI.VFF for en-original
         # with fr track titled "VOF" (VFF is the conservative default)
@@ -939,8 +939,8 @@ class TestAdditionalChecks:
     def hdf(self):
         return HDF(_config())
 
-    def test_always_passes_even_without_french_audio(self, hdf):
-        """HDF does NOT require French audio — check must not block."""
+    def test_warns_without_french_audio(self, hdf):
+        """HDF warns when no French audio detected but does not block."""
         meta = _meta_base(
             mediainfo={"media": {"track": [
                 {"@type": "Audio", "Language": "en"},
