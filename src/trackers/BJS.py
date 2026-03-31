@@ -959,7 +959,11 @@ class BJS:
         """
         Extracts runtime from metadata and converts total minutes into hours and minutes.
         """
-        total_minutes = meta.get("video_duration", 0)
+        raw_duration = meta.get("video_duration", 0)
+        try:
+            total_minutes = max(0, int(float(raw_duration or 0)))
+        except (ValueError, TypeError):
+            total_minutes = 0
         hours, minutes = divmod(total_minutes, 60)
 
         return hours, minutes

@@ -1498,12 +1498,6 @@ async def get_romaji(tmdb_name: str, mal: Optional[int], meta: dict[str, Any]) -
                 response.raise_for_status()
                 json_data = typing_cast(dict[str, Any], response.json())
 
-                demographics = ["Shounen", "Seinen", "Shoujo", "Josei", "Kodomo", "Mina"]
-                for tag in demographics:
-                    if tag in response.text:
-                        demographic = tag
-                        break
-
                 page_data = typing_cast(dict[str, Any], json_data.get("data", {}).get("Page", {}))
                 media = typing_cast(list[dict[str, Any]], page_data.get("media", []))
                 break  # Success - exit retry loop
@@ -1600,6 +1594,15 @@ async def get_romaji(tmdb_name: str, mal: Optional[int], meta: dict[str, Any]) -
         mal_id = int(result.get("idMal", 0) or 0)
         anilist_id = int(result.get("id", 0) or 0)
         eng_title = str(result_title.get("english") or result_title.get("romaji") or "")
+
+        # Derive demographic from the selected result's tags
+        demographics = ["Shounen", "Seinen", "Shoujo", "Josei", "Kodomo", "Mina"]
+        result_tags = [str(t.get("name", "")) for t in result.get("tags", []) if isinstance(t, dict)]
+        for demo in demographics:
+            if demo in result_tags:
+                demographic = demo
+                break
+
         season_year_value = result.get("seasonYear", "")
         season_year = str(season_year_value) if season_year_value is not None else ""
         episodes = int(result.get("episodes", 0) or 0)

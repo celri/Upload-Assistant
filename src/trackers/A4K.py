@@ -106,6 +106,10 @@ class A4K(UNIT3D):
                         if not self._confirm_unknown_bitrate(meta):
                             return False
                     break  # Only check the first video track
+            else:
+                # No video track found in mediainfo
+                if not self._confirm_unknown_bitrate(meta):
+                    return False
 
         return should_continue
 
@@ -136,7 +140,7 @@ class A4K(UNIT3D):
         return
 
     def _confirm_unknown_bitrate(self, meta: dict[str, Any]) -> bool:
-        if not meta["unattended"] or (meta["unattended"] and meta.get("unattended_confirm", False)):
+        if not meta.get("unattended", False) or (meta.get("unattended", False) and meta.get("unattended_confirm", False)):
             console.print(f"[bold red]Could not determine video bitrate from mediainfo for {self.tracker} upload.[/bold red]")
             console.print("[yellow]Bitrate must be above 15000 kbps for movies and 10000 kbps for TV shows.[/yellow]")
             return cli_ui.ask_yes_no("Do you want to upload anyway?", default=False)
