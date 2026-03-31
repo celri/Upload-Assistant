@@ -234,6 +234,24 @@ class HDF(FrenchTrackerMixin):
     #  Language checkboxes
     # ──────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _has_french_audio(meta: Meta) -> bool:
+        """Check whether at least one French audio track is present in MediaInfo."""
+        if "mediainfo" not in meta or "media" not in meta.get("mediainfo", {}):
+            return False
+        from src.trackers.FRENCH import FRENCH_LANG_VALUES
+
+        for track in meta["mediainfo"]["media"].get("track", []):
+            if track.get("@type") != "Audio":
+                continue
+            lang = str(track.get("Language", "")).lower().strip()
+            if lang in FRENCH_LANG_VALUES or lang.startswith("fr"):
+                return True
+            title = str(track.get("Title", "")).lower()
+            if "french" in title or "français" in title or "francais" in title:
+                return True
+        return False
+
     def _compute_language_flags(self, meta: Meta, audio_tag: str) -> dict[str, bool]:
         """Determine which language checkboxes to tick based on the audio tag."""
         flags: dict[str, bool] = {
@@ -641,12 +659,34 @@ class HDF(FrenchTrackerMixin):
     _BLOAT_CHECK_TYPES = frozenset({"REMUX", "ENCODE", "WEBDL", "WEBRIP"})
 
     async def get_additional_checks(self, meta: Meta) -> bool:
-        """Warn about superfluous audio/subtitle tracks.
+        """Check HDF rules: forbidden codecs, French audio, superfluous tracks, NFO."""
+        # AAC audio is forbidden on HDF, except for commentary and audio description tracks
+        mediainfo = meta.get("mediainfo") or {}
+        media = mediainfo.get("media") if isinstance(mediainfo, dict) else {}
+        all_tracks = (media.get("track") if isinstance(media, dict) else None) or []
+        for track in all_tracks:
+            if not isinstance(track, dict) or track.get("@type") != "Audio":
+                continue
+            fmt = str(track.get("Format", "")).strip().upper()
+            if fmt == "AAC":
+                title = str(track.get("Title", "")).lower()
+                if any(kw in title for kw in ("comment", "audiodesc", "audio desc", "description")):
+                    continue
+                console.print(f"[bold red]{self.tracker}: Le codec AAC est interdit sur HD-Forever (sauf commentaires audio et audiodescription). Upload annulé.[/bold red]")
+                meta["skipping"] = self.tracker
+                return False
 
-        HDF rules discourage excessive non-VF/VO tracks on
-        Remux/Encode/WEB releases.
-        This is a warning only — it never blocks the upload.
-        """
+        # French audio (VF) is mandatory — warn if not detected
+        has_french = self._has_french_audio(meta)
+        audio_tracks = [t for t in all_tracks if isinstance(t, dict) and t.get("@type") == "Audio"]
+        is_muet = len(audio_tracks) == 0
+        if not has_french and not is_muet:
+            console.print(
+                f"[bold yellow]{self.tracker}: Aucune piste audio française détectée. "
+                f"La VF est obligatoire sur HDF (sauf exceptions : film sans VF dispo, "
+                f"concerts, films muets, certains WEB-DL).[/bold yellow]"
+            )
+
         # Bloat detection (warning only — does not block upload)
         release_type = str(meta.get("type", "")).upper()
         if release_type in self._BLOAT_CHECK_TYPES:
@@ -824,9 +864,6 @@ class HDF(FrenchTrackerMixin):
         # Language flags
         lang_flags = self._compute_language_flags(meta, audio_tag)
 
-        # Description
-        description = await self._build_description(meta)
-
         # MediaInfo text
         mi_text = await self._get_mediainfo_text(meta)
 
@@ -904,7 +941,6 @@ class HDF(FrenchTrackerMixin):
             "media": self._get_file_type(meta),
             "team": team,
             "release_desc": mi_text,
-            "album_desc": description,
             "image": poster,
         }
 
@@ -917,6 +953,11 @@ class HDF(FrenchTrackerMixin):
             artists_roles.append("1")
         data["artists[]"] = artists_names
         data["importance[]"] = artists_roles
+
+        # Season selector (TV only) — S00 = specials, S01, S02, …
+        if is_tv:
+            season_int = meta.get("season_int", 0)
+            data["season"] = str(int(season_int)) if season_int else "0"
 
         # Scene checkbox
         if meta.get("scene", False):
@@ -994,7 +1035,7 @@ class HDF(FrenchTrackerMixin):
             upload_cookies=self.session.cookies,
             upload_url=self.upload_url,
             id_pattern=r"torrentid=([a-fA-F0-9]+)",
-            success_text="torrents.php?id=",
+            success_text="torrents.php?torrentid=",
         )
 
         return is_uploaded
