@@ -1269,6 +1269,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                         console.print("[yellow]BASE.torrent is missing NFO files required by --keep-nfo. Removing stale torrent...[/yellow]")
                         os.remove(torrent_path)
                         meta["base_torrent_created"] = False
+                        meta["base_torrent_piece_mb"] = None
                         if meta.get("we_checked_them_all"):
                             meta["we_checked_them_all"] = False
             except Exception:

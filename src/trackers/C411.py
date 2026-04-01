@@ -1388,7 +1388,7 @@ class C411(FrenchTrackerMixin):
                     patch_source = base_torrent_path
                 else:
                     for fname in os.listdir(tmp_dir):
-                        if fname.startswith("[") and fname.endswith("].torrent") and fname != f"[{self.tracker}].torrent":
+                        if fname.startswith("[") and fname.endswith("].torrent"):
                             patch_source = os.path.join(tmp_dir, fname)
                             break
                 if patch_source:

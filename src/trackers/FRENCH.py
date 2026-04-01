@@ -1932,9 +1932,12 @@ class FrenchTrackerMixin:
                 continue
             # This file overlaps with the last piece
             read_start = max(0, last_piece_start - offset)
-            with open(f_name, "rb") as fh:  # noqa: ASYNC230
-                fh.seek(read_start)
-                last_piece_data += fh.read(f_length - read_start)
+            try:
+                with open(f_name, "rb") as fh:  # noqa: ASYNC230
+                    fh.seek(read_start)
+                    last_piece_data += fh.read(f_length - read_start)
+            except Exception:
+                return None
             offset = file_end
 
         # Append all NFO data after the existing content
