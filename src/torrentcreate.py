@@ -219,8 +219,8 @@ class TorrentCreator:
 
                 if meta["keep_folder"]:
                     console.print("--keep-folder was specified. Using complete folder for torrent creation.")
-                    # specific nfo catch for certain trackers. BASE catch should prevent unintentional inclusion by default
-                    if meta.get("keep_nfo", False) and "BASE" not in output_filename:
+                    # Include NFO in all torrents except BASE_NONFO (used by skip_nfo trackers)
+                    if meta.get("keep_nfo", False) and output_filename != "BASE_NONFO":
                         console.print("--keep-nfo was specified. Including NFO files in torrent.")
                         include = ["*.mkv", "*.mp4", "*.ts", "*.nfo"]
                         exclude = ["*.*", "*sample.mkv"]
@@ -230,7 +230,7 @@ class TorrentCreator:
                         exclude = ["*", "*/**"]
 
                 elif meta["isdir"]:
-                    if meta.get("keep_nfo", False) and not meta.get("is_disc", False) and "BASE" not in output_filename:
+                    if meta.get("keep_nfo", False) and not meta.get("is_disc", False) and output_filename != "BASE_NONFO":
                         console.print("--keep-nfo was specified. Including NFO files in torrent.")
                         include = ["*.mkv", "*.mp4", "*.ts", "*.nfo"]
                         exclude = ["*.*", "*sample.mkv"]
@@ -474,7 +474,7 @@ class TorrentCreator:
             Torrent.copy(new_torrent).write(f"{base_dir}/tmp/{uuid}/[RAND-{i}]{manual_name}.torrent", overwrite=True)
 
     @staticmethod
-    async def create_base_from_existing_torrent(torrentpath: str, base_dir: str, uuid: str, content_path: Optional[str] = None, skip_nfo: bool = False) -> bool:
+    async def create_base_from_existing_torrent(torrentpath: str, base_dir: str, uuid: str, content_path: Optional[str] = None) -> bool:
         """
         Create BASE.torrent from an existing torrent file.
 
@@ -483,24 +483,14 @@ class TorrentCreator:
             base_dir: Base directory for tmp files
             uuid: Unique identifier for this upload
             content_path: Path to the actual content on disk (for file verification)
-            skip_nfo: If True, reject torrents that contain .nfo files
 
         Returns:
-            True if successful, False if torrent files don't match content on disk or contains .nfo when skip_nfo is True
+            True if successful, False if torrent files don't match content on disk
         """
         if not os.path.exists(torrentpath):
             return False
 
         base_torrent = Torrent.read(torrentpath)
-
-        # Check if torrent contains .nfo files when skip_nfo is enabled
-        if skip_nfo:
-            for torrent_file in base_torrent.files:
-                file_name = str(torrent_file).lower()
-                if file_name.endswith(".nfo"):
-                    console.print(f"[yellow]Existing torrent contains .nfo file but skip_nfo is enabled: {torrent_file}[/yellow]")
-                    console.print("[yellow]Cannot reuse this torrent, will find/create a new one.[/yellow]")
-                    return False
 
         # Verify that all files in the torrent exist on disk
         if content_path and os.path.exists(content_path):
@@ -617,8 +607,8 @@ def create_random_torrents(base_dir: str, uuid: str, num: Union[int, str], path:
     TorrentCreator.create_random_torrents(base_dir, uuid, num, path)
 
 
-async def create_base_from_existing_torrent(torrentpath: str, base_dir: str, uuid: str, content_path: Optional[str] = None, skip_nfo: bool = False) -> bool:
-    return await TorrentCreator.create_base_from_existing_torrent(torrentpath, base_dir, uuid, content_path, skip_nfo)
+async def create_base_from_existing_torrent(torrentpath: str, base_dir: str, uuid: str, content_path: Optional[str] = None) -> bool:
+    return await TorrentCreator.create_base_from_existing_torrent(torrentpath, base_dir, uuid, content_path)
 
 
 def get_mkbrr_path(meta: Mapping[str, Any]) -> str:
