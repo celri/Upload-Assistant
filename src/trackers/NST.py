@@ -360,32 +360,58 @@ class NST(FrenchTrackerMixin, UNIT3D):
         return str(meta.get("mediainfo_text") or "")
 
     async def _read_nfo_content(self, meta: dict[str, Any]) -> str:
-        """Read the first .nfo file content as text, trying common encodings."""
+        """Read the first .nfo file content as text, trying common encodings.
+
+        After decoding, replace Unicode block-drawing characters (from CP437
+        scene NFO art) with ASCII approximations so the text survives any
+        API or web-UI that only handles basic characters.
+        """
         import glob
 
         nfo_files = glob.glob(os.path.join(str(meta.get("path", "")), "*.nfo"))
         if not nfo_files:
             return ""
         nfo_path = nfo_files[0]
+        content = ""
         for encoding in ("utf-8-sig", "utf-8", "cp437", "latin-1"):
             try:
                 async with aiofiles.open(nfo_path, encoding=encoding, errors="strict") as f:
-                    return await f.read()
+                    content = await f.read()
+                break
             except (UnicodeDecodeError, LookupError):  # noqa: PERF203
                 continue
-        # Last resort: lossy read
-        async with aiofiles.open(nfo_path, encoding="utf-8", errors="replace") as f:
-            return await f.read()
+        if not content:
+            # Last resort: lossy read
+            async with aiofiles.open(nfo_path, encoding="utf-8", errors="replace") as f:
+                content = await f.read()
+
+        # Replace common block-drawing Unicode chars with ASCII equivalents
+        # These originate from CP437-encoded scene NFO art
+        _block_map = {
+            "\u2588": "#",  # █ FULL BLOCK
+            "\u2580": "=",  # ▀ UPPER HALF BLOCK
+            "\u2584": "=",  # ▄ LOWER HALF BLOCK
+            "\u2591": ".",  # ░ LIGHT SHADE
+            "\u2592": "+",  # ▒ MEDIUM SHADE
+            "\u2593": "#",  # ▓ DARK SHADE
+            "\u25a0": "#",  # ■ BLACK SQUARE
+        }
+        for char, replacement in _block_map.items():
+            content = content.replace(char, replacement)
+        return content
 
     async def get_mediainfo(self, meta: dict[str, Any]) -> dict[str, str]:
-        """Override UNIT3D.get_mediainfo to prepend NFO content when present."""
-        # Get standard mediainfo from parent
+        """Override UNIT3D.get_mediainfo to append NFO content after MediaInfo.
+
+        MediaInfo text comes first so UNIT3D's parser can still extract
+        metadata.  The NFO art follows, separated by a clear header.
+        """
         result = await super().get_mediainfo(meta)
         mediainfo = result.get("mediainfo", "")
 
         nfo_content = await self._read_nfo_content(meta)
         if nfo_content.strip():
-            mediainfo = nfo_content.rstrip() + "\n\n" + mediainfo
+            mediainfo = mediainfo.rstrip() + "\n\n--- NFO ---\n\n" + nfo_content.rstrip()
 
         return {"mediainfo": mediainfo}
 
