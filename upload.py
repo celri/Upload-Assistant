@@ -1248,9 +1248,12 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
             meta["skip_nfo"] = skip_nfo
 
         if not os.path.exists(torrent_path):
-            # Safety: if meta says BASE was created but the file is missing, reset the flag
+            # Safety: if meta says BASE was created but the file is missing, reset stale flags
+            # so find_existing_torrent gets a chance to search the client again
             if meta.get("base_torrent_created"):
                 meta["base_torrent_created"] = False
+            if meta.get("we_checked_them_all"):
+                meta["we_checked_them_all"] = False
             reuse_torrent = None
             if meta.get("rehash", False) is False and not meta["base_torrent_created"] and not meta["we_checked_them_all"]:
                 reuse_torrent = await client.find_existing_torrent(meta)
