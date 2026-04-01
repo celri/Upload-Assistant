@@ -334,6 +334,9 @@ async def merge_meta(meta: Meta, saved_meta: Meta) -> dict[str, Any]:
         "dual_audio",
         "manual_type",
         "tvmaze_manual",
+        "keep_folder",
+        "keep_nfo",
+        "rehash",
     ]
     sanitized_saved_meta: dict[str, Any] = {}
     for key, value in saved_meta.items():
