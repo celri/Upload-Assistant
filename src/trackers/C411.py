@@ -1378,6 +1378,27 @@ class C411(FrenchTrackerMixin):
                         except Exception:  # nosec B112
                             continue
 
+            # Patch an existing torrent by appending NFO to the file list.
+            # Only the last piece needs rehashing (a few MB instead of the full content).
+            if needs_creation:
+                base_torrent_path = os.path.join(meta["base_dir"], "tmp", meta["uuid"], "BASE.torrent")
+                tmp_dir = os.path.join(meta["base_dir"], "tmp", meta["uuid"])
+                patch_source = None
+                if os.path.exists(base_torrent_path):
+                    patch_source = base_torrent_path
+                else:
+                    for fname in os.listdir(tmp_dir):
+                        if fname.startswith("[") and fname.endswith("].torrent") and fname != f"[{self.tracker}].torrent":
+                            patch_source = os.path.join(tmp_dir, fname)
+                            break
+                if patch_source:
+                    try:
+                        patched = await self._patch_torrent_with_nfo(meta, patch_source, nfo_files)
+                        if patched and os.path.exists(patched):
+                            needs_creation = False
+                    except Exception as e:
+                        console.print(f"[yellow]NFO patch failed ({e}), falling back to full rehash[/yellow]")
+
             if needs_creation:
                 tracker_config = self.config["TRACKERS"].get(self.tracker, {})
                 tracker_url = str(tracker_config.get("announce_url", "https://fake.tracker")).strip()

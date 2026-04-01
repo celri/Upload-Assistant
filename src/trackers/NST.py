@@ -471,6 +471,26 @@ class NST(FrenchTrackerMixin, UNIT3D):
                     except Exception:  # nosec B112
                         continue
 
+            # Patch an existing torrent by appending NFO to the file list.
+            # Only the last piece needs rehashing (a few MB instead of the full content).
+            patch_source = None
+            if os.path.exists(base_torrent_path):
+                patch_source = base_torrent_path
+            else:
+                # Try any tracker torrent as source
+                for fname in os.listdir(tmp_dir):
+                    if fname.startswith("[") and fname.endswith("].torrent") and fname != f"[{self.tracker}].torrent":
+                        patch_source = os.path.join(tmp_dir, fname)
+                        break
+            if patch_source:
+                try:
+                    patched = await self._patch_torrent_with_nfo(meta, patch_source, nfo_files)
+                    if patched and os.path.exists(patched):
+                        meta["upload_torrent_path"] = upload_torrent_path
+                        return nfo_files[0]
+                except Exception as e:
+                    console.print(f"[yellow]NFO patch failed ({e}), falling back to full rehash[/yellow]")
+
             tracker_config = self.config["TRACKERS"].get(self.tracker, {})
             tracker_url = str(tracker_config.get("announce_url", "https://fake.tracker")).strip()
             torrent_create = f"[{self.tracker}]"
