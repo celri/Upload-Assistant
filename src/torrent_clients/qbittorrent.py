@@ -2034,14 +2034,17 @@ async def async_link_directory(src: str, dst: str, use_hardlink: bool = True, de
         # Create destination directory
         await asyncio.to_thread(os.makedirs, os.path.dirname(dst), exist_ok=True)
 
-        # Check if destination already exists
-        if await asyncio.to_thread(os.path.exists, dst):
+        # For single-file destinations, skip if already exists.
+        # For directories, we fall through to the file-by-file loop so that
+        # newly-required files (e.g. NFO after a skip_nfo change) get linked.
+        src_is_file = await asyncio.to_thread(os.path.isfile, src)
+        if src_is_file and await asyncio.to_thread(os.path.exists, dst):
             if debug:
                 console.print(f"[yellow]Skipping linking, path already exists: {dst}")
             return True
 
         # Handle file linking
-        if await asyncio.to_thread(os.path.isfile, src):
+        if src_is_file:
             if use_hardlink:
                 try:
                     await asyncio.to_thread(os.link, src, dst)
@@ -2095,6 +2098,8 @@ async def async_link_directory(src: str, dst: str, use_hardlink: bool = True, de
                         await asyncio.to_thread(os.makedirs, subdir, exist_ok=True)
 
                 def _try_hardlink(src_path: str, dst_path: str, rel_path: str) -> bool:
+                    if os.path.exists(dst_path):
+                        return True  # already linked from a previous run
                     try:
                         os.link(src_path, dst_path)
                         if debug and rel_path == os.path.relpath(all_items[0][0], src):
