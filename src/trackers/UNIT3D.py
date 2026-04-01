@@ -418,8 +418,14 @@ class UNIT3D:
         return files
 
     async def upload(self, meta: dict[str, Any], _: Any) -> bool:
+        from src.trackersetup import nfo_skip_trackers
+
         data = await self.get_data(meta)
-        torrent_file_path = meta.get("upload_torrent_path", f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent")
+        # For trackers that reject .nfo files, use the no-NFO torrent if available
+        if self.tracker in nfo_skip_trackers and "base_nonfo_path" in meta:
+            torrent_file_path = meta["base_nonfo_path"]
+        else:
+            torrent_file_path = meta.get("upload_torrent_path", f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent")
         async with aiofiles.open(torrent_file_path, "rb") as f:
             torrent_bytes = await f.read()
         files = {"torrent": ("torrent.torrent", torrent_bytes, "application/x-bittorrent")}

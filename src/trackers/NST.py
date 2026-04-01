@@ -377,12 +377,43 @@ class NST(FrenchTrackerMixin, UNIT3D):
                     from torf import Torrent
 
                     existing = Torrent.read(upload_torrent_path)
-                    has_nfo = any(str(f).endswith(".nfo") for f in existing.files)
+                    has_nfo = any(str(f).lower().endswith(".nfo") for f in existing.files)
                     if has_nfo:
                         meta["upload_torrent_path"] = upload_torrent_path
                         return nfo_files[0]
                 except Exception:
                     pass  # Fall through to recreation
+
+            # If BASE.torrent already contains NFO, clone it (no rehash needed)
+            base_torrent_path = os.path.join(meta["base_dir"], "tmp", meta["uuid"], "BASE.torrent")
+            if os.path.exists(base_torrent_path):
+                try:
+                    from torf import Torrent
+
+                    base = Torrent.read(base_torrent_path)
+                    if any(str(f).lower().endswith(".nfo") for f in base.files):
+                        common = COMMON(config=self.config)
+                        await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+                        meta["upload_torrent_path"] = upload_torrent_path
+                        return nfo_files[0]
+                except Exception:
+                    pass  # Fall through to full rehash
+
+            # Check if another tracker already created a torrent with NFO (avoid duplicate rehash)
+            tmp_dir = os.path.join(meta["base_dir"], "tmp", meta["uuid"])
+            for fname in os.listdir(tmp_dir):
+                if fname.startswith("[") and fname.endswith("].torrent") and fname != f"[{self.tracker}].torrent":
+                    try:
+                        from torf import Torrent
+
+                        other = Torrent.read(os.path.join(tmp_dir, fname))
+                        if any(str(f).lower().endswith(".nfo") for f in other.files):
+                            common = COMMON(config=self.config)
+                            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=fname.replace(".torrent", ""))
+                            meta["upload_torrent_path"] = upload_torrent_path
+                            return nfo_files[0]
+                    except Exception:  # nosec B112
+                        continue
 
             tracker_config = self.config["TRACKERS"].get(self.tracker, {})
             tracker_url = str(tracker_config.get("announce_url", "https://fake.tracker")).strip()
