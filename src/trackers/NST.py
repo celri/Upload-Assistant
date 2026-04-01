@@ -359,6 +359,36 @@ class NST(FrenchTrackerMixin, UNIT3D):
                     return await f.read()
         return str(meta.get("mediainfo_text") or "")
 
+    async def _read_nfo_content(self, meta: dict[str, Any]) -> str:
+        """Read the first .nfo file content as text, trying common encodings."""
+        import glob
+
+        nfo_files = glob.glob(os.path.join(str(meta.get("path", "")), "*.nfo"))
+        if not nfo_files:
+            return ""
+        nfo_path = nfo_files[0]
+        for encoding in ("utf-8-sig", "utf-8", "cp437", "latin-1"):
+            try:
+                async with aiofiles.open(nfo_path, encoding=encoding, errors="strict") as f:
+                    return await f.read()
+            except (UnicodeDecodeError, LookupError):  # noqa: PERF203
+                continue
+        # Last resort: lossy read
+        async with aiofiles.open(nfo_path, encoding="utf-8", errors="replace") as f:
+            return await f.read()
+
+    async def get_mediainfo(self, meta: dict[str, Any]) -> dict[str, str]:
+        """Override UNIT3D.get_mediainfo to prepend NFO content when present."""
+        # Get standard mediainfo from parent
+        result = await super().get_mediainfo(meta)
+        mediainfo = result.get("mediainfo", "")
+
+        nfo_content = await self._read_nfo_content(meta)
+        if nfo_content.strip():
+            mediainfo = nfo_content.rstrip() + "\n\n" + mediainfo
+
+        return {"mediainfo": mediainfo}
+
     # Get or generate NFO/Mediainfo to send for upload
     async def _recreated_torrent_if_nfo(self, meta: dict[str, Any]) -> str:
         """Re-create a .torrent if NFO is provided.
