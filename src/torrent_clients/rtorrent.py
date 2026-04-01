@@ -465,15 +465,13 @@ class RtorrentClientMixin:
                     base_torrent_path = os.path.join(extracted_torrent_dir, "BASE.torrent")
 
                     try:
-                        reuse_success = await TorrentCreator.create_base_from_existing_torrent(
-                            resolved_path, meta["base_dir"], meta["uuid"], meta.get("path"), meta.get("skip_nfo", False)
-                        )
+                        reuse_success = await TorrentCreator.create_base_from_existing_torrent(resolved_path, meta["base_dir"], meta["uuid"], meta.get("path"))
                         if reuse_success:
                             if meta["debug"]:
                                 console.print("[green]Created BASE.torrent from existing torrent")
                         else:
                             if meta["debug"]:
-                                console.print("[yellow]Existing torrent files don't match content on disk or contains .nfo when skip_nfo is enabled")
+                                console.print("[yellow]Existing torrent files don't match content on disk")
                     except Exception as e:
                         console.print(f"[bold red]Error creating BASE.torrent: {e}")
                         try:
