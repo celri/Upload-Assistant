@@ -233,7 +233,7 @@ class TrackerStatusManager:
                                 if check_torrent:
                                     console.print(f"[yellow]Existing torrent found on {check_torrent}[yellow]")
                                     reuse_success = await TorrentCreator.create_base_from_existing_torrent(
-                                        check_torrent, local_meta["base_dir"], local_meta["uuid"], local_meta.get("path"), local_meta.get("skip_nfo", False)
+                                        check_torrent, local_meta["base_dir"], local_meta["uuid"], local_meta.get("path")
                                     )
                                     if reuse_success:
                                         torrent = Torrent.read(torrent_path)

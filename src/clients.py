@@ -556,21 +556,24 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
                     console.log(f"Single file match status: valid={valid}, wrong_file={wrong_file}")
 
             # Check if number of files matches number of videos
-            elif len(torrent.files) == len(filelist):
-                torrent_filepath = os.path.commonpath(torrent.files)
-                actual_filepath = os.path.commonpath(filelist)
-                local_path, remote_path = await self.remote_path_map(meta, client)
-                if local_path.lower() in meta_path.lower() and local_path.lower() != remote_path.lower():
-                    actual_filepath = actual_filepath.replace(local_path, remote_path).replace(os.sep, "/")
+            # Filter out .nfo files from torrent when comparing, since filelist only has media files
+            else:
+                torrent_media_files = [f for f in torrent.files if not str(f).lower().endswith(".nfo")]
+                if len(torrent_media_files) == len(filelist):
+                    torrent_filepath = os.path.commonpath(torrent_media_files)
+                    actual_filepath = os.path.commonpath(filelist)
+                    local_path, remote_path = await self.remote_path_map(meta, client)
+                    if local_path.lower() in meta_path.lower() and local_path.lower() != remote_path.lower():
+                        actual_filepath = actual_filepath.replace(local_path, remote_path).replace(os.sep, "/")
 
-                if meta["debug"]:
-                    console.log(f"Torrent_filepath: {torrent_filepath}")
-                    console.log(f"Actual_filepath: {actual_filepath}")
+                    if meta["debug"]:
+                        console.log(f"Torrent_filepath: {torrent_filepath}")
+                        console.log(f"Actual_filepath: {actual_filepath}")
 
-                if torrent_filepath in actual_filepath:
-                    valid = True
-                if meta["debug"]:
-                    console.log(f"Multiple file match status: valid={valid}")
+                    if torrent_filepath in actual_filepath:
+                        valid = True
+                    if meta["debug"]:
+                        console.log(f"Multiple file match status: valid={valid}")
 
         else:
             console.print(f"[bold yellow]{torrent_path} was not found")

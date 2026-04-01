@@ -200,9 +200,7 @@ class QbittorrentClientMixin:
                                         console.print(f"[bold red]Validation failed for {torrent_file_path}")
                                     os.remove(torrent_file_path)  # Remove invalid file
                                 else:
-                                    await TorrentCreator.create_base_from_existing_torrent(
-                                        torrent_file_path, meta["base_dir"], meta["uuid"], meta.get("path"), meta.get("skip_nfo", False)
-                                    )
+                                    await TorrentCreator.create_base_from_existing_torrent(torrent_file_path, meta["base_dir"], meta["uuid"], meta.get("path"))
                             except asyncio.TimeoutError:
                                 console.print(f"[bold red]Failed to export .torrent for {torrent_hash} after retries")
 
@@ -1556,7 +1554,7 @@ class QbittorrentClientMixin:
                                     # If piece preference is disabled, return first valid torrent
                                     try:
                                         reuse_success = await TorrentCreator.create_base_from_existing_torrent(
-                                            torrent_file_path, meta["base_dir"], meta["uuid"], meta.get("path"), meta.get("skip_nfo", False)
+                                            torrent_file_path, meta["base_dir"], meta["uuid"], meta.get("path")
                                         )
                                         if reuse_success:
                                             if meta["debug"]:
@@ -1566,9 +1564,7 @@ class QbittorrentClientMixin:
                                             found_valid_torrent = True
                                         else:
                                             if meta["debug"]:
-                                                console.print(
-                                                    f"[yellow]Torrent {torrent_hash} files don't match content on disk or contains .nfo when skip_nfo is enabled, skipping"
-                                                )
+                                                console.print(f"[yellow]Torrent {torrent_hash} files don't match content on disk, skipping")
                                     except Exception as e:
                                         console.print(f"[bold red]Error creating BASE.torrent: {e}")
                             else:
@@ -1672,7 +1668,7 @@ class QbittorrentClientMixin:
                                             # If piece preference is disabled, return first valid torrent
                                             try:
                                                 reuse_success = await TorrentCreator.create_base_from_existing_torrent(
-                                                    alt_torrent_file_path, meta["base_dir"], meta["uuid"], meta.get("path"), meta.get("skip_nfo", False)
+                                                    alt_torrent_file_path, meta["base_dir"], meta["uuid"], meta.get("path")
                                                 )
                                                 if reuse_success:
                                                     if meta["debug"]:
@@ -1684,9 +1680,7 @@ class QbittorrentClientMixin:
                                                     break
                                                 else:
                                                     if meta["debug"]:
-                                                        console.print(
-                                                            f"[yellow]Alternative torrent {alt_torrent_hash} files don't match content on disk or contains .nfo when skip_nfo is enabled, skipping"
-                                                        )
+                                                        console.print(f"[yellow]Alternative torrent {alt_torrent_hash} files don't match content on disk, skipping")
                                             except Exception as e:
                                                 console.print(f"[bold red]Error creating BASE.torrent for alternative: {e}")
                                     else:
@@ -1706,7 +1700,7 @@ class QbittorrentClientMixin:
                                 preference_type = "MTV preference" if prefer_small_pieces else "16 MiB piece limit"
                                 console.print(f"[green]Using best match torrent ({preference_type}) with hash: {piece_size_best_match['hash']}")
                                 reuse_success = await TorrentCreator.create_base_from_existing_torrent(
-                                    piece_size_best_match["torrent_path"], meta["base_dir"], meta["uuid"], meta.get("path"), meta.get("skip_nfo", False)
+                                    piece_size_best_match["torrent_path"], meta["base_dir"], meta["uuid"], meta.get("path")
                                 )
                                 if reuse_success:
                                     if meta["debug"]:
@@ -2040,14 +2034,17 @@ async def async_link_directory(src: str, dst: str, use_hardlink: bool = True, de
         # Create destination directory
         await asyncio.to_thread(os.makedirs, os.path.dirname(dst), exist_ok=True)
 
-        # Check if destination already exists
-        if await asyncio.to_thread(os.path.exists, dst):
+        # For single-file destinations, skip if already exists.
+        # For directories, we fall through to the file-by-file loop so that
+        # newly-required files (e.g. NFO after a skip_nfo change) get linked.
+        src_is_file = await asyncio.to_thread(os.path.isfile, src)
+        if src_is_file and await asyncio.to_thread(os.path.exists, dst):
             if debug:
                 console.print(f"[yellow]Skipping linking, path already exists: {dst}")
             return True
 
         # Handle file linking
-        if await asyncio.to_thread(os.path.isfile, src):
+        if src_is_file:
             if use_hardlink:
                 try:
                     await asyncio.to_thread(os.link, src, dst)
@@ -2101,6 +2098,8 @@ async def async_link_directory(src: str, dst: str, use_hardlink: bool = True, de
                         await asyncio.to_thread(os.makedirs, subdir, exist_ok=True)
 
                 def _try_hardlink(src_path: str, dst_path: str, rel_path: str) -> bool:
+                    if os.path.exists(dst_path):
+                        return True  # already linked from a previous run
                     try:
                         os.link(src_path, dst_path)
                         if debug and rel_path == os.path.relpath(all_items[0][0], src):
