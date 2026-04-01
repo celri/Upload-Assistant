@@ -1862,6 +1862,8 @@ class FrenchTrackerMixin:
         source_flag = getattr(self, "source_flag", "")
         tracker_config = self.config["TRACKERS"].get(tracker_name, {})  # type: ignore[attr-defined]
         announce_url = str(tracker_config.get("announce_url", "https://fake.tracker")).strip()
+        if not tracker_name or not source_flag or not announce_url or announce_url == "https://fake.tracker":
+            return None
         output_path = os.path.join(meta["base_dir"], "tmp", meta["uuid"], f"[{tracker_name}].torrent")
 
         result = await asyncio.to_thread(
@@ -1931,6 +1933,12 @@ class FrenchTrackerMixin:
                 offset = file_end
                 continue
             # This file overlaps with the last piece
+            try:
+                actual_size = os.path.getsize(f_name)
+            except OSError:
+                return None
+            if actual_size != f_length:
+                return None
             read_start = max(0, last_piece_start - offset)
             try:
                 with open(f_name, "rb") as fh:  # noqa: ASYNC230
@@ -1965,7 +1973,10 @@ class FrenchTrackerMixin:
         for key in ("announce-list", "url-list", "httpseeds", "nodes"):
             patched.metainfo.pop(key, None)
 
-        patched.write(output_path, overwrite=True)
+        try:
+            patched.write(output_path, overwrite=True)
+        except Exception:
+            return None
 
         nfo_kb = len(nfo_data) / 1024
         tail_mb = len(last_piece_data) / (1024 * 1024)
