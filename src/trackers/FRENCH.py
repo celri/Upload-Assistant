@@ -1961,6 +1961,10 @@ class FrenchTrackerMixin:
         patched.metainfo["comment"] = ""
         patched.metainfo["announce"] = announce_url
 
+        # Strip residual tracker/seed fields from the source torrent
+        for key in ("announce-list", "url-list", "httpseeds", "nodes"):
+            patched.metainfo.pop(key, None)
+
         patched.write(output_path, overwrite=True)
 
         nfo_kb = len(nfo_data) / 1024
