@@ -1341,7 +1341,7 @@ class C411(FrenchTrackerMixin):
                     from torf import Torrent
 
                     existing = Torrent.read(torrent_path)
-                    if any(str(f).endswith(".nfo") for f in existing.files):
+                    if any(str(f).lower().endswith(".nfo") for f in existing.files):
                         needs_creation = False
                 except Exception:
                     pass
@@ -1354,7 +1354,7 @@ class C411(FrenchTrackerMixin):
                         from torf import Torrent
 
                         base = Torrent.read(base_torrent_path)
-                        if any(str(f).endswith(".nfo") for f in base.files):
+                        if any(str(f).lower().endswith(".nfo") for f in base.files):
                             await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
                             needs_creation = False
                     except Exception:
@@ -1369,7 +1369,7 @@ class C411(FrenchTrackerMixin):
                             from torf import Torrent
 
                             other = Torrent.read(os.path.join(tmp_dir, fname))
-                            if any(str(f).endswith(".nfo") for f in other.files):
+                            if any(str(f).lower().endswith(".nfo") for f in other.files):
                                 await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=fname.replace(".torrent", ""))
                                 needs_creation = False
                                 break

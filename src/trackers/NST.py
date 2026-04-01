@@ -377,7 +377,7 @@ class NST(FrenchTrackerMixin, UNIT3D):
                     from torf import Torrent
 
                     existing = Torrent.read(upload_torrent_path)
-                    has_nfo = any(str(f).endswith(".nfo") for f in existing.files)
+                    has_nfo = any(str(f).lower().endswith(".nfo") for f in existing.files)
                     if has_nfo:
                         meta["upload_torrent_path"] = upload_torrent_path
                         return nfo_files[0]
@@ -391,7 +391,7 @@ class NST(FrenchTrackerMixin, UNIT3D):
                     from torf import Torrent
 
                     base = Torrent.read(base_torrent_path)
-                    if any(str(f).endswith(".nfo") for f in base.files):
+                    if any(str(f).lower().endswith(".nfo") for f in base.files):
                         common = COMMON(config=self.config)
                         await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
                         meta["upload_torrent_path"] = upload_torrent_path
@@ -407,7 +407,7 @@ class NST(FrenchTrackerMixin, UNIT3D):
                         from torf import Torrent
 
                         other = Torrent.read(os.path.join(tmp_dir, fname))
-                        if any(str(f).endswith(".nfo") for f in other.files):
+                        if any(str(f).lower().endswith(".nfo") for f in other.files):
                             common = COMMON(config=self.config)
                             await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=fname.replace(".torrent", ""))
                             meta["upload_torrent_path"] = upload_torrent_path

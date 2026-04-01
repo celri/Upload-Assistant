@@ -1272,7 +1272,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                 base_t = await asyncio.to_thread(Torrent.read, torrent_path)
                 if any(str(f).lower().endswith(".nfo") for f in base_t.files):
                     nonfo_path = os.path.join(os.path.dirname(torrent_path), "BASE_NONFO.torrent")
-                    if not os.path.exists(nonfo_path):
+                    if not os.path.exists(nonfo_path) and not meta.get("nohash", False):
                         await TorrentCreator.create_torrent(meta, Path(meta["path"]), "BASE_NONFO")
                     if os.path.exists(nonfo_path):
                         meta["base_nonfo_path"] = nonfo_path
