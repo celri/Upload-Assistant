@@ -354,6 +354,8 @@ class TOS(FrenchTrackerMixin, UNIT3D):
                     await asyncio.sleep(cooldown)
                 await TorrentCreator.create_torrent(meta, str(meta["path"]), torrent_create, tracker_url=tracker_url)
 
+            meta["upload_torrent_path"] = upload_torrent_path
+
         return {"name": name}
 
     async def get_additional_checks(self, meta: dict[str, Any]) -> bool:
