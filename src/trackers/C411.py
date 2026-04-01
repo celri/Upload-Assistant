@@ -1341,10 +1341,40 @@ class C411(FrenchTrackerMixin):
                     from torf import Torrent
 
                     existing = Torrent.read(torrent_path)
-                    if any(str(f).endswith(".nfo") for f in existing.files):
+                    if any(str(f).lower().endswith(".nfo") for f in existing.files):
                         needs_creation = False
                 except Exception:
                     pass
+
+            # If BASE.torrent already contains NFO, clone it (no rehash needed)
+            if needs_creation:
+                base_torrent_path = os.path.join(meta["base_dir"], "tmp", meta["uuid"], "BASE.torrent")
+                if os.path.exists(base_torrent_path):
+                    try:
+                        from torf import Torrent
+
+                        base = Torrent.read(base_torrent_path)
+                        if any(str(f).lower().endswith(".nfo") for f in base.files):
+                            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+                            needs_creation = False
+                    except Exception:
+                        pass
+
+            # Check if another tracker already created a torrent with NFO (avoid duplicate rehash)
+            if needs_creation:
+                tmp_dir = os.path.join(meta["base_dir"], "tmp", meta["uuid"])
+                for fname in os.listdir(tmp_dir):
+                    if fname.startswith("[") and fname.endswith("].torrent") and fname != f"[{self.tracker}].torrent":
+                        try:
+                            from torf import Torrent
+
+                            other = Torrent.read(os.path.join(tmp_dir, fname))
+                            if any(str(f).lower().endswith(".nfo") for f in other.files):
+                                await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=fname.replace(".torrent", ""))
+                                needs_creation = False
+                                break
+                        except Exception:  # nosec B112
+                            continue
 
             if needs_creation:
                 tracker_config = self.config["TRACKERS"].get(self.tracker, {})

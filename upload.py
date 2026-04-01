@@ -1252,9 +1252,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
             if meta.get("rehash", False) is False and not meta["base_torrent_created"] and not meta["we_checked_them_all"]:
                 reuse_torrent = await client.find_existing_torrent(meta)
                 if reuse_torrent is not None:
-                    reuse_success = await TorrentCreator.create_base_from_existing_torrent(
-                        reuse_torrent, meta["base_dir"], meta["uuid"], meta["path"], meta.get("skip_nfo", False)
-                    )
+                    reuse_success = await TorrentCreator.create_base_from_existing_torrent(reuse_torrent, meta["base_dir"], meta["uuid"], meta["path"])
                     if not reuse_success:
                         reuse_torrent = None  # Force creation of new torrent
 
@@ -1265,6 +1263,23 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
 
         elif os.path.exists(torrent_path) and meta.get("rehash", False) is True and meta["nohash"] is False:
             await TorrentCreator.create_torrent(meta, Path(meta["path"]), "BASE")
+
+        # If BASE.torrent contains .nfo files and some trackers need a clean version,
+        # create BASE_NONFO.torrent once (single rehash) for all skip_nfo trackers.
+        meta.pop("base_nonfo_path", None)
+        if os.path.exists(torrent_path) and meta.get("skip_nfo", False):
+            try:
+                base_t = await asyncio.to_thread(Torrent.read, torrent_path)
+                if any(str(f).lower().endswith(".nfo") for f in base_t.files):
+                    nonfo_path = os.path.join(os.path.dirname(torrent_path), "BASE_NONFO.torrent")
+                    if not os.path.exists(nonfo_path) and not meta.get("nohash", False):
+                        await TorrentCreator.create_torrent(meta, Path(meta["path"]), "BASE_NONFO")
+                    if os.path.exists(nonfo_path):
+                        meta["base_nonfo_path"] = nonfo_path
+            except Exception as e:
+                console.print(
+                    f"[yellow]Warning: failed to create NFO-free torrent for skip_nfo trackers: {e}. These trackers will use BASE.torrent which may contain .nfo files.[/yellow]"
+                )
 
         if os.path.exists(torrent_path):
             raw_trackers = meta.get("trackers")
