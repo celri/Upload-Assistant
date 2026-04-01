@@ -93,20 +93,22 @@ class C411(FrenchTrackerMixin):
         if not main_tracks:
             return meta.get("audio", "").replace("Dual-Audio", "").replace("Dubbed", "").replace("DD+", "DDP")
 
-        def most_channels_priority(t):
+        def _is_track_lossless(t):
+            return (
+                t.get("Compression_Mode") == "Lossless"
+                or any(f in str(t.get("Format_AdditionalFeatures", "")) for f in lossless_additional_features)
+                or any(f in str(t.get("Format_Commercial_IfAny", "")) for f in lossless_additional_features)
+            )
+
+        def most_channels_priority_lossless(t):
             channels = int(t.get("Channels", "0"))
             is_french = 1 if self._map_language(str(t.get("Language", ""))) == "FRA" else 0
-            return (channels, is_french)
+            is_lossless = 1 if (_is_track_lossless(t)) else 0
+            return (is_lossless, channels, is_french)
 
-        most_channels = max(main_tracks, key=most_channels_priority)
+        most_channels = max(main_tracks, key=most_channels_priority_lossless)
 
-        is_lossless = (
-            most_channels.get("Compression_Mode") == "Lossless"
-            or any(f in str(most_channels.get("Format_AdditionalFeatures", "")) for f in lossless_additional_features)
-            or any(f in str(most_channels.get("Format_Commercial_IfAny", "")) for f in lossless_additional_features)
-        )
-
-        if is_lossless:
+        if _is_track_lossless(most_channels):
             return codec_info_from_track(most_channels).replace("DD+", "DDP")
 
         fra_tracks = [t for t in main_tracks if self._map_language(str(t.get("Language", ""))) == "FRA"]
