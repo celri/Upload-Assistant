@@ -1251,6 +1251,26 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                 break
         meta["skip_nfo"] = skip_nfo
 
+        # If --keep-nfo but BASE.torrent was created without the NFO (previous run),
+        # remove the stale BASE.torrent so the client-reuse path can find a torrent
+        # that already includes the NFO (avoids a full rehash).
+        if os.path.exists(torrent_path) and meta.get("keep_nfo", False):
+            try:
+                base_t = await asyncio.to_thread(Torrent.read, torrent_path)
+                has_nfo = any(str(f).lower().endswith(".nfo") for f in base_t.files)
+                if not has_nfo:
+                    # Check if there actually are NFO files on disk
+                    content_path = str(meta.get("path", ""))
+                    nfo_on_disk = any(f.lower().endswith(".nfo") for f in os.listdir(content_path)) if os.path.isdir(content_path) else False
+                    if nfo_on_disk:
+                        console.print("[yellow]BASE.torrent is missing NFO files required by --keep-nfo. Removing stale torrent...[/yellow]")
+                        os.remove(torrent_path)
+                        meta["base_torrent_created"] = False
+                        if meta.get("we_checked_them_all"):
+                            meta["we_checked_them_all"] = False
+            except Exception:
+                pass  # If we can't read it, let the normal flow handle it
+
         if not os.path.exists(torrent_path):
             # Safety: if meta says BASE was created but the file is missing, reset stale flags
             # so find_existing_torrent gets a chance to search the client again
