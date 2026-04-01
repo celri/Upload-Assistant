@@ -328,16 +328,33 @@ class TOS(FrenchTrackerMixin, UNIT3D):
 
         # Recreate torrent if keep_nfo is set
         if meta.get("keep_nfo", False):
-            tracker_config = self.config["TRACKERS"].get(self.tracker, {})
-            tracker_url = str(tracker_config.get("announce_url", "https://fake.tracker")).strip()
-            torrent_create = f"[{self.tracker}]"
-            try:
-                cooldown = int(self.config.get("DEFAULT", {}).get("rehash_cooldown", 0) or 0)
-            except (ValueError, TypeError):
-                cooldown = 0
-            if cooldown > 0:
-                await asyncio.sleep(cooldown)
-            await TorrentCreator.create_torrent(meta, str(meta["path"]), torrent_create, tracker_url=tracker_url)
+            upload_torrent_path = os.path.join(meta["base_dir"], "tmp", meta["uuid"], f"[{self.tracker}].torrent")
+
+            # Reuse existing torrent if it already contains .nfo files
+            needs_creation = True
+            if os.path.exists(upload_torrent_path):
+                try:
+                    from torf import Torrent
+
+                    existing = Torrent.read(upload_torrent_path)
+                    if any(str(f).endswith(".nfo") for f in existing.files):
+                        needs_creation = False
+                except Exception:
+                    pass
+
+            if needs_creation:
+                tracker_config = self.config["TRACKERS"].get(self.tracker, {})
+                tracker_url = str(tracker_config.get("announce_url", "https://fake.tracker")).strip()
+                torrent_create = f"[{self.tracker}]"
+                try:
+                    cooldown = int(self.config.get("DEFAULT", {}).get("rehash_cooldown", 0) or 0)
+                except (ValueError, TypeError):
+                    cooldown = 0
+                if cooldown > 0:
+                    await asyncio.sleep(cooldown)
+                await TorrentCreator.create_torrent(meta, str(meta["path"]), torrent_create, tracker_url=tracker_url)
+
+            meta["upload_torrent_path"] = upload_torrent_path
 
         return {"name": name}
 
