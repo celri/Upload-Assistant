@@ -1276,8 +1276,10 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
                         await TorrentCreator.create_torrent(meta, Path(meta["path"]), "BASE_NONFO")
                     if os.path.exists(nonfo_path):
                         meta["base_nonfo_path"] = nonfo_path
-            except Exception:
-                pass  # If check fails, skip_nfo trackers will still use BASE
+            except Exception as e:
+                console.print(
+                    f"[yellow]Warning: failed to create NFO-free torrent for skip_nfo trackers: {e}. These trackers will use BASE.torrent which may contain .nfo files.[/yellow]"
+                )
 
         if os.path.exists(torrent_path):
             raw_trackers = meta.get("trackers")
