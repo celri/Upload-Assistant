@@ -385,16 +385,27 @@ class NST(FrenchTrackerMixin, UNIT3D):
             async with aiofiles.open(nfo_path, encoding="utf-8", errors="replace") as f:
                 content = await f.read()
 
-        # Replace common block-drawing Unicode chars with ASCII equivalents
-        # These originate from CP437-encoded scene NFO art
+        # Replace common block-drawing Unicode chars with ASCII equivalents.
+        # These originate from CP437-encoded scene NFO art.
+        # Also include their Latin-1 byte equivalents (what you get if
+        # the CP437 bytes are wrongly decoded as Latin-1) as a safety net.
         _block_map = {
-            "\u2588": "#",  # █ FULL BLOCK
-            "\u2580": "=",  # ▀ UPPER HALF BLOCK
-            "\u2584": "=",  # ▄ LOWER HALF BLOCK
-            "\u2591": ".",  # ░ LIGHT SHADE
-            "\u2592": "+",  # ▒ MEDIUM SHADE
-            "\u2593": "#",  # ▓ DARK SHADE
-            "\u25a0": "#",  # ■ BLACK SQUARE
+            # CP437 decoded as Unicode
+            "\u2588": "#",  # █ FULL BLOCK  (byte 0xDB)
+            "\u2580": "=",  # ▀ UPPER HALF BLOCK (byte 0xDF)
+            "\u2584": "=",  # ▄ LOWER HALF BLOCK (byte 0xDC)
+            "\u2591": ".",  # ░ LIGHT SHADE (byte 0xB0)
+            "\u2592": "+",  # ▒ MEDIUM SHADE (byte 0xB1)
+            "\u2593": "#",  # ▓ DARK SHADE (byte 0xB2)
+            "\u25a0": "#",  # ■ BLACK SQUARE (byte 0xFE)
+            # Latin-1 mis-decoding of the same CP437 bytes
+            "\u00db": "#",  # Û = 0xDB mis-decoded
+            "\u00df": "=",  # ß = 0xDF mis-decoded
+            "\u00dc": "=",  # Ü = 0xDC mis-decoded
+            "\u00b0": ".",  # ° = 0xB0 mis-decoded
+            "\u00b1": "+",  # ± = 0xB1 mis-decoded
+            "\u00b2": "#",  # ² = 0xB2 mis-decoded
+            "\u00fe": "#",  # þ = 0xFE mis-decoded
         }
         for char, replacement in _block_map.items():
             content = content.replace(char, replacement)
@@ -414,6 +425,17 @@ class NST(FrenchTrackerMixin, UNIT3D):
             mediainfo = mediainfo.rstrip() + "\n\n--- NFO ---\n\n" + nfo_content.rstrip()
 
         return {"mediainfo": mediainfo}
+
+    async def get_additional_files(self, meta: dict[str, Any]) -> dict[str, tuple[str, bytes, str]]:
+        """Override UNIT3D to NOT send the raw .nfo file.
+
+        NST already receives the NFO content inside the 'mediainfo' field
+        (sanitized and appended after MediaInfo text).  Sending the raw
+        CP437 NFO as a separate file causes UNIT3D to display it with
+        wrong encoding (showing \u00db instead of \u2588 etc.) and can
+        hide the MediaInfo text.
+        """
+        return {}
 
     # Get or generate NFO/Mediainfo to send for upload
     async def _recreated_torrent_if_nfo(self, meta: dict[str, Any]) -> str:
