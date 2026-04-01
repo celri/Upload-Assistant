@@ -219,8 +219,8 @@ class TorrentCreator:
 
                 if meta["keep_folder"]:
                     console.print("--keep-folder was specified. Using complete folder for torrent creation.")
-                    # specific nfo catch for certain trackers. BASE catch should prevent unintentional inclusion by default
-                    if meta.get("keep_nfo", False) and "BASE" not in output_filename:
+                    # Include NFO in all torrents except BASE_NONFO (used by skip_nfo trackers)
+                    if meta.get("keep_nfo", False) and output_filename != "BASE_NONFO":
                         console.print("--keep-nfo was specified. Including NFO files in torrent.")
                         include = ["*.mkv", "*.mp4", "*.ts", "*.nfo"]
                         exclude = ["*.*", "*sample.mkv"]
@@ -230,7 +230,7 @@ class TorrentCreator:
                         exclude = ["*", "*/**"]
 
                 elif meta["isdir"]:
-                    if meta.get("keep_nfo", False) and not meta.get("is_disc", False) and "BASE" not in output_filename:
+                    if meta.get("keep_nfo", False) and not meta.get("is_disc", False) and output_filename != "BASE_NONFO":
                         console.print("--keep-nfo was specified. Including NFO files in torrent.")
                         include = ["*.mkv", "*.mp4", "*.ts", "*.nfo"]
                         exclude = ["*.*", "*sample.mkv"]
