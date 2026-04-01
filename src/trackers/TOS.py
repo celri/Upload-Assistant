@@ -342,6 +342,21 @@ class TOS(FrenchTrackerMixin, UNIT3D):
                 except Exception:
                     pass
 
+            # If BASE.torrent already contains NFO, clone it (no rehash needed)
+            if needs_creation:
+                base_torrent_path = os.path.join(meta["base_dir"], "tmp", meta["uuid"], "BASE.torrent")
+                if os.path.exists(base_torrent_path):
+                    try:
+                        from torf import Torrent
+
+                        base = Torrent.read(base_torrent_path)
+                        if any(str(f).endswith(".nfo") for f in base.files):
+                            common = COMMON(config=self.config)
+                            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
+                            needs_creation = False
+                    except Exception:
+                        pass
+
             if needs_creation:
                 tracker_config = self.config["TRACKERS"].get(self.tracker, {})
                 tracker_url = str(tracker_config.get("announce_url", "https://fake.tracker")).strip()
