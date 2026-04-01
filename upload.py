@@ -1229,23 +1229,27 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
             waiter = Wait(config)
             await waiter.select_and_recheck_best_torrent(meta, meta["path"], check_interval=5)
 
-        # Check if any target tracker has skip_nfo and store in meta for reuse
-        if "skip_nfo" not in meta:
-            skip_nfo = False
-            raw_trackers = meta.get("trackers")
-            if isinstance(raw_trackers, str):
-                target_trackers = [raw_trackers]
-            elif isinstance(raw_trackers, list):
-                target_trackers = [str(t) for t in cast(list[Any], raw_trackers) if str(t).strip()]
-            else:
-                target_trackers = []
-            for tracker in target_trackers:
-                if tracker.upper() in nfo_skip_trackers:
-                    skip_nfo = True
-                    if meta.get("debug"):
-                        console.print(f"[cyan]skip_nfo is enabled for tracker {tracker}[/cyan]")
-                    break
-            meta["skip_nfo"] = skip_nfo
+        # Check if any confirmed skip_nfo tracker is actually being uploaded to.
+        # Always recompute: previous runs may have cached a stale value.
+        skip_nfo = False
+        raw_trackers = meta.get("trackers")
+        if isinstance(raw_trackers, str):
+            target_trackers = [raw_trackers]
+        elif isinstance(raw_trackers, list):
+            target_trackers = [str(t) for t in cast(list[Any], raw_trackers) if str(t).strip()]
+        else:
+            target_trackers = []
+        tracker_status = cast(dict[str, dict[str, Any]], meta.get("tracker_status", {}))
+        for tracker in target_trackers:
+            # Only consider trackers the user confirmed for upload
+            if not tracker_status.get(tracker, {}).get("upload", False):
+                continue
+            if tracker.upper() in nfo_skip_trackers:
+                skip_nfo = True
+                if meta.get("debug"):
+                    console.print(f"[cyan]skip_nfo is enabled for tracker {tracker}[/cyan]")
+                break
+        meta["skip_nfo"] = skip_nfo
 
         if not os.path.exists(torrent_path):
             # Safety: if meta says BASE was created but the file is missing, reset stale flags
