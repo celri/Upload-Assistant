@@ -1901,6 +1901,12 @@ class FrenchTrackerMixin:
         """Synchronous core of _patch_torrent_with_nfo (runs in a thread)."""
         from torf import Torrent
 
+        # Bail out if any NFO file already exists in the source torrent
+        existing_names = {f_info["path"][-1] for f_info in old_files if f_info.get("path")}
+        for nfo_path in nfo_files:
+            if os.path.basename(nfo_path) in existing_names:
+                return None
+
         # Read NFO file data and build new file entries (appended at end)
         nfo_entries: list[dict[str, Any]] = []
         nfo_data = b""
