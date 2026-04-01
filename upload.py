@@ -1252,9 +1252,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
             if meta.get("rehash", False) is False and not meta["base_torrent_created"] and not meta["we_checked_them_all"]:
                 reuse_torrent = await client.find_existing_torrent(meta)
                 if reuse_torrent is not None:
-                    reuse_success = await TorrentCreator.create_base_from_existing_torrent(
-                        reuse_torrent, meta["base_dir"], meta["uuid"], meta["path"], meta.get("skip_nfo", False)
-                    )
+                    reuse_success = await TorrentCreator.create_base_from_existing_torrent(reuse_torrent, meta["base_dir"], meta["uuid"], meta["path"])
                     if not reuse_success:
                         reuse_torrent = None  # Force creation of new torrent
 
