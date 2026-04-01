@@ -409,7 +409,7 @@ class NST(FrenchTrackerMixin, UNIT3D):
                         other = Torrent.read(os.path.join(tmp_dir, fname))
                         if any(str(f).endswith(".nfo") for f in other.files):
                             common = COMMON(config=self.config)
-                            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=fname.replace(".torrent", "").strip("[]"))
+                            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=fname.replace(".torrent", ""))
                             meta["upload_torrent_path"] = upload_torrent_path
                             return nfo_files[0]
                     except Exception:  # nosec B112

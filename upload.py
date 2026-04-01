@@ -1266,6 +1266,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
 
         # If BASE.torrent contains .nfo files and some trackers need a clean version,
         # create BASE_NONFO.torrent once (single rehash) for all skip_nfo trackers.
+        meta.pop("base_nonfo_path", None)
         if os.path.exists(torrent_path) and meta.get("skip_nfo", False):
             try:
                 base_t = await asyncio.to_thread(Torrent.read, torrent_path)

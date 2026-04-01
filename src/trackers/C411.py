@@ -1370,7 +1370,7 @@ class C411(FrenchTrackerMixin):
 
                             other = Torrent.read(os.path.join(tmp_dir, fname))
                             if any(str(f).endswith(".nfo") for f in other.files):
-                                await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=fname.replace(".torrent", "").strip("[]"))
+                                await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=fname.replace(".torrent", ""))
                                 needs_creation = False
                                 break
                         except Exception:  # nosec B112
