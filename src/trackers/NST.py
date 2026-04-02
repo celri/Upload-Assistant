@@ -359,62 +359,6 @@ class NST(FrenchTrackerMixin, UNIT3D):
                     return await f.read()
         return str(meta.get("mediainfo_text") or "")
 
-    async def _read_nfo_content(self, meta: dict[str, Any]) -> str:
-        """Read the first .nfo file content as text, trying common encodings.
-
-        After decoding, replace Unicode block-drawing characters (from CP437
-        scene NFO art) with ASCII approximations so the text survives any
-        API or web-UI that only handles basic characters.
-        """
-        import glob
-
-        nfo_files = glob.glob(os.path.join(str(meta.get("path", "")), "*.nfo"))
-        if not nfo_files:
-            return ""
-        nfo_path = nfo_files[0]
-        content = ""
-        for encoding in ("utf-8-sig", "utf-8", "cp437", "latin-1"):
-            try:
-                async with aiofiles.open(nfo_path, encoding=encoding, errors="strict") as f:
-                    content = await f.read()
-                break
-            except (UnicodeDecodeError, LookupError):  # noqa: PERF203
-                continue
-        if not content:
-            # Last resort: lossy read
-            async with aiofiles.open(nfo_path, encoding="utf-8", errors="replace") as f:
-                content = await f.read()
-
-        # Replace common block-drawing Unicode chars with ASCII equivalents
-        # These originate from CP437-encoded scene NFO art
-        _block_map = {
-            "\u2588": "#",  # █ FULL BLOCK
-            "\u2580": "=",  # ▀ UPPER HALF BLOCK
-            "\u2584": "=",  # ▄ LOWER HALF BLOCK
-            "\u2591": ".",  # ░ LIGHT SHADE
-            "\u2592": "+",  # ▒ MEDIUM SHADE
-            "\u2593": "#",  # ▓ DARK SHADE
-            "\u25a0": "#",  # ■ BLACK SQUARE
-        }
-        for char, replacement in _block_map.items():
-            content = content.replace(char, replacement)
-        return content
-
-    async def get_mediainfo(self, meta: dict[str, Any]) -> dict[str, str]:
-        """Override UNIT3D.get_mediainfo to append NFO content after MediaInfo.
-
-        MediaInfo text comes first so UNIT3D's parser can still extract
-        metadata.  The NFO art follows, separated by a clear header.
-        """
-        result = await super().get_mediainfo(meta)
-        mediainfo = result.get("mediainfo", "")
-
-        nfo_content = await self._read_nfo_content(meta)
-        if nfo_content.strip():
-            mediainfo = mediainfo.rstrip() + "\n\n--- NFO ---\n\n" + nfo_content.rstrip()
-
-        return {"mediainfo": mediainfo}
-
     # Get or generate NFO/Mediainfo to send for upload
     async def _recreated_torrent_if_nfo(self, meta: dict[str, Any]) -> str:
         """Re-create a .torrent if NFO is provided.
@@ -470,6 +414,26 @@ class NST(FrenchTrackerMixin, UNIT3D):
                             return nfo_files[0]
                     except Exception:  # nosec B112
                         continue
+
+            # Patch an existing torrent by appending NFO to the file list.
+            # Only the last piece needs rehashing (a few MB instead of the full content).
+            patch_source = None
+            if os.path.exists(base_torrent_path):
+                patch_source = base_torrent_path
+            else:
+                # Try any tracker torrent as source
+                for fname in os.listdir(tmp_dir):
+                    if fname.startswith("[") and fname.endswith("].torrent") and fname != f"[{self.tracker}].torrent":
+                        patch_source = os.path.join(tmp_dir, fname)
+                        break
+            if patch_source:
+                try:
+                    patched = await self._patch_torrent_with_nfo(meta, patch_source, nfo_files)
+                    if patched and os.path.exists(patched):
+                        meta["upload_torrent_path"] = upload_torrent_path
+                        return nfo_files[0]
+                except Exception as e:
+                    console.print(f"[yellow]NFO patch failed ({e}), falling back to full rehash[/yellow]")
 
             tracker_config = self.config["TRACKERS"].get(self.tracker, {})
             tracker_url = str(tracker_config.get("announce_url", "https://fake.tracker")).strip()
