@@ -1,12 +1,10 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
-import asyncio
 from typing import Any, Optional
 
 import cli_ui
 import httpx
 
 from src.console import console
-from src.torrentcreate import TorrentCreator
 from src.trackers.COMMON import COMMON
 from src.trackers.FRENCH import FrenchTrackerMixin
 from src.trackers.UNIT3D import UNIT3D, QueryValue
@@ -325,68 +323,6 @@ class TOS(FrenchTrackerMixin, UNIT3D):
         name = re.sub(r"\.(-\.)+", ".", name)
         name = re.sub(r"\.{2,}", ".", name)
         name = name.strip(".")
-
-        # Recreate torrent if keep_nfo is set
-        if meta.get("keep_nfo", False):
-            upload_torrent_path = os.path.join(meta["base_dir"], "tmp", meta["uuid"], f"[{self.tracker}].torrent")
-
-            # Reuse existing torrent if it already contains .nfo files
-            needs_creation = True
-            if os.path.exists(upload_torrent_path):
-                try:
-                    from torf import Torrent
-
-                    existing = Torrent.read(upload_torrent_path)
-                    if any(str(f).lower().endswith(".nfo") for f in existing.files):
-                        needs_creation = False
-                except Exception:
-                    pass
-
-            # If BASE.torrent already contains NFO, clone it (no rehash needed)
-            if needs_creation:
-                base_torrent_path = os.path.join(meta["base_dir"], "tmp", meta["uuid"], "BASE.torrent")
-                if os.path.exists(base_torrent_path):
-                    try:
-                        from torf import Torrent
-
-                        base = Torrent.read(base_torrent_path)
-                        if any(str(f).lower().endswith(".nfo") for f in base.files):
-                            common = COMMON(config=self.config)
-                            await common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
-                            needs_creation = False
-                    except Exception:
-                        pass
-
-            # Check if another tracker already created a torrent with NFO (avoid duplicate rehash)
-            if needs_creation:
-                tmp_dir = os.path.join(meta["base_dir"], "tmp", meta["uuid"])
-                for fname in os.listdir(tmp_dir):
-                    if fname.startswith("[") and fname.endswith("].torrent") and fname != f"[{self.tracker}].torrent":
-                        try:
-                            from torf import Torrent
-
-                            other = Torrent.read(os.path.join(tmp_dir, fname))
-                            if any(str(f).lower().endswith(".nfo") for f in other.files):
-                                common = COMMON(config=self.config)
-                                await common.create_torrent_for_upload(meta, self.tracker, self.source_flag, torrent_filename=fname.replace(".torrent", ""))
-                                needs_creation = False
-                                break
-                        except Exception:  # nosec B112
-                            continue
-
-            if needs_creation:
-                tracker_config = self.config["TRACKERS"].get(self.tracker, {})
-                tracker_url = str(tracker_config.get("announce_url", "https://fake.tracker")).strip()
-                torrent_create = f"[{self.tracker}]"
-                try:
-                    cooldown = int(self.config.get("DEFAULT", {}).get("rehash_cooldown", 0) or 0)
-                except (ValueError, TypeError):
-                    cooldown = 0
-                if cooldown > 0:
-                    await asyncio.sleep(cooldown)
-                await TorrentCreator.create_torrent(meta, str(meta["path"]), torrent_create, tracker_url=tracker_url)
-
-            meta["upload_torrent_path"] = upload_torrent_path
 
         return {"name": name}
 
