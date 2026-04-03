@@ -449,12 +449,38 @@ class QbittorrentClientMixin:
                 if not torrent_hash:
                     continue
 
-                # **Use `torrent_storage_dir` if available**
+                # **Use `torrent_storage_dir` if available, fall back to API export if file missing**
                 if torrent_storage_dir:
                     torrent_file_path = os.path.join(torrent_storage_dir, f"{torrent_hash}.torrent")
                     if not os.path.exists(torrent_file_path):
-                        console.print(f"[yellow]Torrent file not found in storage directory: {torrent_file_path}")
-                        continue
+                        console.print(f"[yellow]Torrent file not found in storage directory: {torrent_file_path}, trying API export")
+                        torrent_file_content = None
+                        if proxy_url:
+                            if qbt_session is not None:
+                                try:
+                                    async with qbt_session.post(f"{proxy_url.rstrip('/')}/api/v2/torrents/export", data={"hash": torrent_hash}) as response:
+                                        if response.status == 200:
+                                            torrent_file_content = await response.read()
+                                        else:
+                                            console.print(f"[red]Failed to export torrent via proxy: {response.status}")
+                                except Exception as e:
+                                    console.print(f"[red]Error exporting torrent via proxy: {e}")
+                        elif qbt_client is not None:
+                            try:
+                                torrent_file_content = await self.retry_qbt_operation(
+                                    lambda qbt_client=qbt_client, torrent_hash=torrent_hash: asyncio.to_thread(qbt_client.torrents_export, torrent_hash=torrent_hash),
+                                    f"Export torrent {torrent_hash}",
+                                )
+                            except Exception as e:
+                                console.print(f"[bold red]Failed to export .torrent for {torrent_hash}: {e}")
+                        if torrent_file_content is not None:
+                            torrent_file_path = os.path.join(extracted_torrent_dir, f"{torrent_hash}.torrent")
+                            await asyncio.to_thread(Path(torrent_file_path).write_bytes, torrent_file_content)
+                            if meta["debug"]:
+                                console.print(f"[green]Exported .torrent via API: {torrent_file_path}")
+                        else:
+                            console.print(f"[bold red]Could not retrieve .torrent for {torrent_hash}, skipping")
+                            continue
                 else:
                     # **Fetch from qBittorrent API if no `torrent_storage_dir`**
                     if meta["debug"]:
