@@ -308,7 +308,12 @@ class TorrentCreator:
                             exclude_str = cls.build_mkbrr_exclude_string(str(path), meta["filelist"])
                             cmd.extend(["--exclude", exclude_str])
                             if include:
-                                include_str = ",".join(sorted(include))
+                                # mkbrr matches --include patterns relative to the input directory,
+                                # not its parent. Strip any leading "FolderName/" prefix so that
+                                # patterns like "FolderName/file.mkv" become just "file.mkv".
+                                folder_prefix = os.path.basename(str(path)) + "/"
+                                mkbrr_include = [p[len(folder_prefix) :] if p.startswith(folder_prefix) else p for p in include]
+                                include_str = ",".join(sorted(mkbrr_include))
                                 cmd.extend(["--include", include_str])
 
                         cmd.extend(["-o", output_path])
@@ -316,6 +321,8 @@ class TorrentCreator:
                             console.print(f"[cyan]mkbrr cmd: {cmd}")
 
                         # Run mkbrr subprocess in thread to avoid blocking
+                        error_lines: list[str] = []
+
                         def run_mkbrr() -> int:
                             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
 
@@ -331,6 +338,8 @@ class TorrentCreator:
 
                                 # Detect hashing progress, speed, and percentage
                                 match = re.search(r"Hashing pieces.*?\[(\d+(?:\.\d+)? (?:G|M)(?:B|iB)/s)\]\s+(\d+)%", line)
+                                if not match and line and "Hashing" not in line and "Wrote" not in line:
+                                    error_lines.append(line)
                                 if match:
                                     speed = match.group(1)  # Extract speed (e.g., "1.7 GiB/s")
                                     pieces_done = int(match.group(2))  # Extract percentage (e.g., "14")
@@ -364,6 +373,8 @@ class TorrentCreator:
                         # Verify the torrent was actually created
                         if result != 0:
                             console.print(f"[bold red]mkbrr exited with non-zero status code: {result}")
+                            if error_lines:
+                                console.print(f"[bold red]mkbrr output: {' | '.join(error_lines)}")
                             raise RuntimeError(f"mkbrr exited with status code {result}")
 
                         if not os.path.exists(output_path):
