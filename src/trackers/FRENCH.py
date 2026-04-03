@@ -10,6 +10,7 @@ to share a single, canonical implementation of:
   · Release naming (dot-separated, French-tracker conventions)
 """
 
+import asyncio
 import glob
 import hashlib
 import os
@@ -19,6 +20,9 @@ from typing import Any, Optional, Union
 from unidecode import unidecode
 
 from src.audio import AD_TRACK_RE, codec_info_from_track
+from src.console import console
+from src.torrentcreate import TorrentCreator
+from src.trackers.COMMON import COMMON
 
 Meta = dict[str, Any]
 
@@ -1987,3 +1991,95 @@ class FrenchTrackerMixin:
         nfo_kb = len(nfo_data) / 1024
         tail_mb = len(last_piece_data) / (1024 * 1024)
         return (nfo_kb, tail_mb)
+
+    async def _recreated_torrent_if_nfo(self, meta: dict[str, Any], common: COMMON, config: dict[str, Any], tracker: str, source_flag: str) -> str:
+        """Re-create a .torrent if NFO is provided.
+
+        Some trackers requires the NFO if provided
+        by releaser. We generated a .torrent with
+        it if needed
+        """
+        nfo_files = self._get_nfo_files(meta)
+        if nfo_files:
+            upload_torrent_path = os.path.join(meta["base_dir"], "tmp", meta["uuid"], f"[{tracker}].torrent")
+
+            # Reuse existing torrent if it already contains .nfo files
+            if os.path.exists(upload_torrent_path):
+                try:
+                    from torf import Torrent
+
+                    existing = Torrent.read(upload_torrent_path)
+                    has_nfo = any(str(f).lower().endswith(".nfo") for f in existing.files)
+                    if has_nfo:
+                        meta["upload_torrent_path"] = upload_torrent_path
+                        return nfo_files[0]
+                except Exception:
+                    pass  # Fall through to recreation
+
+            # If BASE.torrent already contains NFO, clone it (no rehash needed)
+            base_torrent_path = os.path.join(meta["base_dir"], "tmp", meta["uuid"], "BASE.torrent")
+            if os.path.exists(base_torrent_path):
+                try:
+                    from torf import Torrent
+
+                    base = Torrent.read(base_torrent_path)
+                    if any(str(f).lower().endswith(".nfo") for f in base.files):
+                        common = COMMON(config=config)
+                        await common.create_torrent_for_upload(meta, tracker, source_flag)
+                        meta["upload_torrent_path"] = upload_torrent_path
+                        return nfo_files[0]
+                except Exception:
+                    pass  # Fall through to full rehash
+
+            # Check if another tracker already created a torrent with NFO (avoid duplicate rehash)
+            tmp_dir = os.path.join(meta["base_dir"], "tmp", meta["uuid"])
+            for fname in os.listdir(tmp_dir):
+                if fname.startswith("[") and fname.endswith("].torrent") and fname != f"[{tracker}].torrent":
+                    try:
+                        from torf import Torrent
+
+                        other = Torrent.read(os.path.join(tmp_dir, fname))
+                        if any(str(f).lower().endswith(".nfo") for f in other.files):
+                            common = COMMON(config=config)
+                            await common.create_torrent_for_upload(meta, tracker, source_flag, torrent_filename=fname.replace(".torrent", ""))
+                            meta["upload_torrent_path"] = upload_torrent_path
+                            return nfo_files[0]
+                    except Exception:  # nosec B112
+                        continue
+
+            # Patch an existing torrent by appending NFO to the file list.
+            # Only the last piece needs rehashing (a few MB instead of the full content).
+            patch_source = None
+            if os.path.exists(base_torrent_path):
+                patch_source = base_torrent_path
+            else:
+                # Try any tracker torrent as source
+                for fname in os.listdir(tmp_dir):
+                    if fname.startswith("[") and fname.endswith("].torrent") and fname != f"[{tracker}].torrent":
+                        patch_source = os.path.join(tmp_dir, fname)
+                        break
+            if patch_source:
+                try:
+                    patched = await self._patch_torrent_with_nfo(meta, patch_source, nfo_files)
+                    if patched and os.path.exists(patched):
+                        meta["upload_torrent_path"] = upload_torrent_path
+                        return nfo_files[0]
+                except Exception as e:
+                    console.print(f"[yellow]NFO patch failed ({e}), falling back to full rehash[/yellow]")
+
+            tracker_config = config["TRACKERS"].get(tracker, {})
+            tracker_url = str(tracker_config.get("announce_url", "https://fake.tracker")).strip()
+            torrent_create = f"[{tracker}]"
+            try:
+                cooldown = int(config.get("DEFAULT", {}).get("rehash_cooldown", 0) or 0)
+            except (ValueError, TypeError):
+                cooldown = 0
+            if cooldown > 0:
+                await asyncio.sleep(cooldown)
+            await TorrentCreator.create_torrent(meta, str(meta["path"]), torrent_create, tracker_url=tracker_url)
+            if not os.path.exists(upload_torrent_path):
+                raise FileNotFoundError(f"Failed to create {upload_torrent_path}")
+            meta["upload_torrent_path"] = upload_torrent_path
+            return nfo_files[0]
+        else:
+            return ""
