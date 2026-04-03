@@ -2024,7 +2024,6 @@ class FrenchTrackerMixin:
 
                     base = Torrent.read(base_torrent_path)
                     if any(str(f).lower().endswith(".nfo") for f in base.files):
-                        common = COMMON(config=config)
                         await common.create_torrent_for_upload(meta, tracker, source_flag)
                         meta["upload_torrent_path"] = upload_torrent_path
                         return nfo_files[0]
@@ -2040,7 +2039,6 @@ class FrenchTrackerMixin:
 
                         other = Torrent.read(os.path.join(tmp_dir, fname))
                         if any(str(f).lower().endswith(".nfo") for f in other.files):
-                            common = COMMON(config=config)
                             await common.create_torrent_for_upload(meta, tracker, source_flag, torrent_filename=fname.replace(".torrent", ""))
                             meta["upload_torrent_path"] = upload_torrent_path
                             return nfo_files[0]
