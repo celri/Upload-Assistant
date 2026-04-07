@@ -49,7 +49,7 @@ upload.py [path...] [options]
 - `-df`, `--descfile PATH`: Custom description file path (or filename in current working directory).
   - Stored as an absolute path.
 - `-nfo`, `--nfo`: Use `.nfo` in directory for description.
-- `-n`, `--note "MY NOTE"` : Custom note to add to description (French and UNIT3D trackers only).
+- `-n`, `--note "MY NOTE" or --note PATH` : Custom note to add to description (French and UNIT3D trackers only). Absolute path to a file or text.
 
 ## Metadata overrides (IDs, category/type/source, title shaping)
 

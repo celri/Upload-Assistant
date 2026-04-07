@@ -24,6 +24,7 @@ import httpx
 from unidecode import unidecode
 
 from src.console import console
+from src.get_desc import DescriptionBuilder
 from src.nfo_generator import SceneNfoGenerator
 from src.tmdb import TmdbManager
 from src.trackers.COMMON import COMMON
@@ -1012,7 +1013,7 @@ class C411(FrenchTrackerMixin):
         rel_lines.append(f"[b][color={C}]Titre :[/color][/b] {release_name}" if release_name else f"[b][color={C}]Titre :[/color][/b]")
 
         # Personal note with -n/--note
-        personal_note = meta.get("personal_note", "")
+        personal_note = await DescriptionBuilder(self.tracker, self.config).get_personal_note(meta)
         if personal_note:
             rel_lines.append(f"[b][color={C}]Note :[/color][/b] {personal_note}")
 
