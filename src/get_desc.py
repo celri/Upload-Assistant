@@ -467,6 +467,25 @@ class DescriptionBuilder:
 
         return release_url, cover_images
 
+    async def get_personal_note(self, meta: dict[str, Any]) -> str:
+        personal_note = meta.get("personal_note", "")
+        lines = ""
+
+        if personal_note and os.path.isfile(personal_note):
+            try:
+                async with aiofiles.open(personal_note, encoding="utf-8", errors="replace") as note_file:
+                    async for line in note_file:
+                        lines += line.strip() +"\n"
+            except FileNotFoundError:
+                console.print(f"[yellow]Warning: Personal note file not found: {personal_note}[/yellow]")
+            except PermissionError:
+                console.print(f"[yellow]Warning: Permisio denied for personal note file: {personal_note}[/yellow]")
+            except OSError as e:
+                console.print(f"[yellow]Warning: Can't open personal note file: {str(e)}[/yellow]")
+        elif personal_note:
+            lines = personal_note
+        return lines
+
     async def unit3d_edit_desc(
         self,
         meta: dict[str, Any],
@@ -563,6 +582,9 @@ class DescriptionBuilder:
 
         # Description from file/pastebin link
         desc_parts.append(await self.get_user_description(meta))
+
+        # Personal note with -n/--note
+        desc_parts.append(await self.get_personal_note(meta))
 
         # Menu Screenshots
         desc_parts.append(await self.menu_section(meta))
