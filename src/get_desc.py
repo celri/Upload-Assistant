@@ -476,10 +476,8 @@ class DescriptionBuilder:
                 async with aiofiles.open(personal_note, encoding="utf-8", errors="replace") as note_file:
                     async for line in note_file:
                         lines += line.strip() + "\n"
-            except FileNotFoundError:
-                console.print(f"[yellow]Warning: Personal note file not found: {personal_note}[/yellow]")
             except PermissionError:
-                console.print(f"[yellow]Warning: Permisio denied for personal note file: {personal_note}[/yellow]")
+                console.print(f"[yellow]Warning: Permision denied for personal note file: {personal_note}[/yellow]")
             except OSError as e:
                 console.print(f"[yellow]Warning: Can't open personal note file: {str(e)}[/yellow]")
         elif personal_note:
