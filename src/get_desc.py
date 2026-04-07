@@ -475,7 +475,7 @@ class DescriptionBuilder:
             try:
                 async with aiofiles.open(personal_note, encoding="utf-8", errors="replace") as note_file:
                     async for line in note_file:
-                        lines += line.strip() +"\n"
+                        lines += line.strip() + "\n"
             except FileNotFoundError:
                 console.print(f"[yellow]Warning: Personal note file not found: {personal_note}[/yellow]")
             except PermissionError:
