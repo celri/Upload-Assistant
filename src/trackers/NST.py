@@ -6,6 +6,7 @@ from typing import Any
 import aiofiles
 
 from src.console import console
+from src.get_desc import DescriptionBuilder
 from src.rehostimages import RehostImagesManager
 from src.trackers.COMMON import COMMON
 from src.trackers.FRENCH import FrenchTrackerMixin
@@ -310,7 +311,7 @@ class NST(FrenchTrackerMixin, UNIT3D):
         group = self._get_release_group(meta)
         if group:
             parts.append(f"[b]Groupe :[/b] {group}")
-        personal_note = meta.get("personal_note", "")
+        personal_note = await DescriptionBuilder(self.tracker, self.config).get_personal_note(meta)
         if personal_note:
             parts.append(f"[b]Note :[/b] {personal_note}")
         parts.append("")
