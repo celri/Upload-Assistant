@@ -144,13 +144,15 @@ class VideoManager:
             if debug:
                 console.print("[blue]Scanning directory for video files...[/blue]")
             try:
-                entries = [e for e in os.listdir(videoloc) if os.path.isfile(os.path.join(videoloc, e))]
+                entries = []
+                for root, _dirs, files in os.walk(videoloc):
+                    entries.extend(os.path.join(root, f) for f in files)
             except Exception:
                 entries = []
 
             video_exts = {".mkv", ".mp4", ".ts"}
             for file in entries:
-                fname_lower = file.lower()
+                fname_lower = os.path.basename(file).lower()
                 ext = os.path.splitext(file)[1].lower()
                 if ext not in video_exts:
                     continue
@@ -159,7 +161,7 @@ class VideoManager:
                 if "sample" in fname_lower and "!sample" not in fname_lower:
                     continue
 
-                filelist.append(os.path.abspath(os.path.join(videoloc, file)))
+                filelist.append(os.path.abspath(file))
 
             filelist = sorted(filelist)
             if debug and filelist:
