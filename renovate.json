@@ -3,7 +3,7 @@
   "extends": [
     "config:recommended"
   ],
-  "ignoreTests": true,
+  "ignoreTests": false,
   "packageRules": [
     {
       "matchUpdateTypes": [
