@@ -22,6 +22,7 @@ from bs4 import BeautifulSoup
 
 from src.console import console
 from src.cookie_auth import CookieAuthUploader, CookieValidator
+from src.get_desc import DescriptionBuilder
 from src.nfo_generator import SceneNfoGenerator
 from src.tmdb import TmdbManager
 from src.trackers.FRENCH import LANG_MAP, LANG_NAMES_FR, FrenchTrackerMixin
@@ -572,6 +573,11 @@ class HDF(FrenchTrackerMixin):
 
         release_name = meta.get("name", "") or meta.get("title", "")
         parts.append(f"[b][color={C}]Titre :[/color][/b] [i]{release_name}[/i]")
+
+        # Personal note with -n/--note
+        personal_note = await DescriptionBuilder(self.tracker, self.config).get_personal_note(meta)
+        if personal_note:
+            parts.append(f"[b][color={C}]Note :[/color][/b] {personal_note}")
 
         size_str = self._get_total_size(meta, mi_text)
         if size_str:
