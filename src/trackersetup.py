@@ -58,6 +58,7 @@ from src.trackers.LUME import LUME
 from src.trackers.MTV import MTV
 from src.trackers.NBL import NBL
 from src.trackers.NST import NST
+from src.trackers.NXM import NXM
 from src.trackers.OE import OE
 from src.trackers.OTW import OTW
 from src.trackers.PHD import PHD
@@ -1367,6 +1368,7 @@ tracker_class_map: dict[str, type[Any]] = {
     "MTV": MTV,
     "NBL": NBL,
     "NST": NST,
+    "NXM": NXM,
     "OE": OE,
     "OTW": OTW,
     "PHD": PHD,
@@ -1445,7 +1447,7 @@ api_trackers = {
     "YUS",
 }
 
-other_api_trackers = {"ANT", "BHDTV", "C411", "DC", "GPW", "NBL", "RTF", "SN", "SPD", "TL", "TORR9", "TVC"}
+other_api_trackers = {"ANT", "BHDTV", "C411", "DC", "GPW", "NBL", "NXM", "RTF", "SN", "SPD", "TL", "TORR9", "TVC"}
 
 http_trackers = {"AR", "ASC", "AZ", "BJS", "BT", "CZ", "FF", "FL", "HDB", "HDF", "HDS", "HDT", "IS", "MTV", "PHD", "PTER", "PTS", "TTG"}
 
@@ -1454,10 +1456,10 @@ http_trackers = {"AR", "ASC", "AZ", "BJS", "BT", "CZ", "FF", "FL", "HDB", "HDF",
 nfo_skip_trackers = frozenset({"DP", "FNP", "HHD", "LST", "LUME", "STC", "ULCX"})
 
 # Trackers that accept releases without a group tag, mapped to their replacement label
-notag_labels: dict[str, str] = {"C411": "NOTAG", "FNP": "NOGROUP", "G3MINI": "NoGrP", "GF": "NoTag"}
+notag_labels: dict[str, str] = {"C411": "NOTAG", "FNP": "NOGROUP", "G3MINI": "NoGrP", "GF": "NoTag", "NXM": "NoGrp"}
 
 # Trackers that skip the English audio/subtitle requirement check
-english_check_skip_trackers = frozenset({"C411", "G3MINI", "GF", "HDF", "NST", "TOS", "TORR9"})
+english_check_skip_trackers = frozenset({"C411", "G3MINI", "GF", "HDF", "NST", "NXM", "TOS", "TORR9"})
 
 # Trackers that require French audio or subtitles (warn if neither is detected)
 french_check_trackers = frozenset({"C411", "G3MINI", "GF", "HDF", "NST", "TOS", "TORR9"})
