@@ -26,6 +26,7 @@ from unidecode import unidecode
 from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.nfo_generator import SceneNfoGenerator
+from src.tmdb import TmdbManager
 from src.trackers.COMMON import COMMON
 from src.trackers.FRENCH import FrenchTrackerMixin
 
@@ -49,6 +50,7 @@ class NXM(FrenchTrackerMixin):
         self.torrent_url: str = "https://nexum-core.com/torrents/"
         self.search_url: str = "https://nexum-core.com/api/v1/torrents/"
         self.api_key: str = str(self.config["TRACKERS"].get(self.tracker, {}).get("api_key", "")).strip()
+        self.tmdb_manager = TmdbManager(config)
         self.banned_groups: list[str] = [
             "Avitech",
             "Boheme",
@@ -87,7 +89,7 @@ class NXM(FrenchTrackerMixin):
     # ── FrenchTrackerMixin overrides ──────────────────────────────────
 
     PREFER_ORIGINAL_TITLE: bool = True
-    UHD_ONLY_FOR_REMUX_DISC: bool = False
+    UHD_ONLY_FOR_REMUX_DISC: bool = True
 
     # ──────────────────────────────────────────────────────────
     #  Audio / naming / French title — inherited from FrenchTrackerMixin
