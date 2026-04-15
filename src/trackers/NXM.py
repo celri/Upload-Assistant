@@ -49,8 +49,40 @@ class NXM(FrenchTrackerMixin):
         self.torrent_url: str = "https://nexum-core.com/torrents/"
         self.search_url: str = "https://nexum-core.com/api/v1/torrents/"
         self.api_key: str = str(self.config["TRACKERS"].get(self.tracker, {}).get("api_key", "")).strip()
-        #self.tmdb_manager = TmdbManager(config)
-        self.banned_groups: list[str] = ["Avitech", "Boheme", "CINeHD", "Cpasbien", "CPB", "CZ530", "D0LL4R", "EXTREME", "FGT", "FLOP", "Firetown", "FLY3R", "FuN", "GAÏA", "HDMIDIMADRIDI", "KILLERMIX", "LUCKY", "NEWCiNE", "PiCKLES", "RARBG", "ROLLED", "RPZ", "SHARKS", "ShowFR", "SUNS3T", "TicaDow", "Tokushi", "Torrent9", "TVPSLO", "Wawa-Porno", "ZT", "ZW"]
+        self.banned_groups: list[str] = [
+            "Avitech",
+            "Boheme",
+            "CINeHD",
+            "Cpasbien",
+            "CPB",
+            "CZ530",
+            "D0LL4R",
+            "EXTREME",
+            "FGT",
+            "FLOP",
+            "Firetown",
+            "FLY3R",
+            "FuN",
+            "GAÏA",
+            "HDMIDIMADRIDI",
+            "KILLERMIX",
+            "LUCKY",
+            "NEWCiNE",
+            "PiCKLES",
+            "RARBG",
+            "ROLLED",
+            "RPZ",
+            "SHARKS",
+            "ShowFR",
+            "SUNS3T",
+            "TicaDow",
+            "Tokushi",
+            "Torrent9",
+            "TVPSLO",
+            "Wawa-Porno",
+            "ZT",
+            "ZW",
+        ]
 
     # ── FrenchTrackerMixin overrides ──────────────────────────────────
 
@@ -210,7 +242,6 @@ class NXM(FrenchTrackerMixin):
                 async with aiofiles.open(bd_path, encoding="utf-8") as f:
                     return await f.read()
         return str(meta.get("mediainfo_text") or "")
-
 
     # ──────────────────────────────────────────────────────────
     #  NFO generation - Same as C411
@@ -585,6 +616,7 @@ class NXM(FrenchTrackerMixin):
             console.print(f"[cyan]NXM dupe search found {len(dupes)} result(s)[/cyan]")
 
         return await self._check_french_lang_dupes(dupes, meta)
+
     async def edit_desc(self, _meta: Meta) -> None:
         """No-op — NXM descriptions are built in upload()."""
         return
