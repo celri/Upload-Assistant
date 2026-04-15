@@ -338,7 +338,7 @@ class NXM(FrenchTrackerMixin):
         # ── Multipart form ──
 
         tmdb_id = meta.get("tmdb_id", "")
-        tmdb_type = meta.get("tmdb_type", "").lower()
+        tmdb_type = meta.get("category", "").lower()
 
         files: dict[str, tuple[str, bytes, str]] = {
             "torrent": ("torrent.torrent", torrent_bytes, "application/x-bittorrent"),
