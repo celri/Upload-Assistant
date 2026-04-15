@@ -1,4 +1,4 @@
-# Tests for NXM tracker — nostradamus.foo (Nostradamus)
+# Tests for NXM tracker — nexum-core.com (Nostradamus)
 """
 Test suite for the NXM tracker implementation.
 Covers: category mapping, URL configuration,

@@ -780,7 +780,7 @@ config = {
             # nexum-core.com — French private tracker (custom API)
             # Get your API key from your nexum-core.com profile settings
             "api_key": "",
-            # Announce URL with your passkey — found on your c411.org profile page
+            # Announce URL with your passkey — found on your nexum-core.com profile page
             "announce_url": "https://nexum-core.com/announce/YOUR_PASSKEY",
             # Include screenshots in the upload description (default: False)
             "include_screenshots": False,
