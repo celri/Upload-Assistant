@@ -8,6 +8,7 @@ import aiofiles
 from src.console import console
 from src.get_desc import DescriptionBuilder
 from src.rehostimages import RehostImagesManager
+from src.tmdb import TmdbManager
 from src.trackers.COMMON import COMMON
 from src.trackers.FRENCH import FrenchTrackerMixin
 from src.trackers.UNIT3D import UNIT3D
@@ -43,6 +44,7 @@ class NST(FrenchTrackerMixin, UNIT3D):
         self.torrent_url = f"{self.base_url}/torrents/"
         self.rehost_images_manager = RehostImagesManager(config)
         self.approved_image_hosts = ["imgbox", "ptscreens", "onlyimage", "pixhost"]
+        self.tmdb_manager = TmdbManager(config)
         self.banned_groups: list[str] = []
         self.source_flag = "NST"
 
@@ -55,6 +57,8 @@ class NST(FrenchTrackerMixin, UNIT3D):
 
     # NST wants streaming service in name
     INCLUDE_SERVICE_IN_NAME: bool = True
+
+    UHD_ONLY_FOR_REMUX_DISC: bool = True
 
     # ── Category helpers ──────────────────────────────────────────────
 
