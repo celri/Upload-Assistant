@@ -774,6 +774,17 @@ config = {
             # Include screenshots in the upload description (default: False)
             "include_screenshots": False,
         },
+        "NXM": {
+            # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
+            "link_dir_name": "",
+            # nexum-core.com — French private tracker (custom API)
+            # Get your API key from your nexum-core.com profile settings
+            "api_key": "",
+            # Announce URL with your passkey — found on your nexum-core.com profile page
+            "announce_url": "https://nexum-core.com/announce/YOUR_PASSKEY",
+            # Include screenshots in the upload description (default: False)
+            "include_screenshots": False,
+        },
         "OE": {
             # Instead of using the tracker acronym for folder name when sym/hard linking, you can use a custom name
             "link_dir_name": "",

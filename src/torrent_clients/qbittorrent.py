@@ -1824,6 +1824,7 @@ async def match_tracker_url(tracker_urls: list[str], meta: dict[str, Any]) -> No
         "lume": ["https://luminarr.me"],
         "mtv": ["tracker.morethantv"],
         "nbl": ["tracker.nebulance"],
+        "nxm": ["nexum-core.com"],
         "oe": ["https://onlyencodes.cc"],
         "otw": ["https://oldtoons.world"],
         "phd": ["tracker.privatehd"],
