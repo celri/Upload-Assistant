@@ -467,7 +467,7 @@ class DupeChecker:
 
                 if same_season_episode_dupe and (target_resolution.lower() not in each.lower()):
                     await log_exclusion(f"OTW same-season episode resolution mismatch: expected '{target_resolution}'", each)
-                    return False
+                    return True
 
             if not skip_resolution_check:
                 if target_resolution and target_resolution not in each:

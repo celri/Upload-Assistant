@@ -120,7 +120,7 @@ class ANT:
             flags.append("HDR10")
         if "DV" in meta["hdr"]:
             flags.append("DV")
-        if "Criterion" in (meta.get("distributor", "") or meta.get("edition", "")):
+        if "Criterion" in meta.get("distributor", "") or "Criterion" in meta.get("edition", ""):
             flags.append("Criterion")
         if "REMUX" in meta["type"]:
             flags.append("Remux")
