@@ -458,20 +458,11 @@ class DupeChecker:
 
             skip_resolution_check = bool(is_dvd or "DVD" in target_source or is_dvdrip)
 
-            if (
-                tracker_name == "OTW"
-                and not is_tv_pack
-                and meta.get("category") == "TV"
-                and target_episode
-                and target_resolution
-            ):
+            if tracker_name == "OTW" and not is_tv_pack and meta.get("category") == "TV" and target_episode and target_resolution:
                 dupe_season_match = re.search(r"[sS](\d+)", each)
                 dupe_has_episode = bool(re.search(r"[eE]\d{2}", each))
                 same_season_episode_dupe = (
-                    target_season_number is not None
-                    and dupe_season_match is not None
-                    and int(dupe_season_match.group(1)) == target_season_number
-                    and dupe_has_episode
+                    target_season_number is not None and dupe_season_match is not None and int(dupe_season_match.group(1)) == target_season_number and dupe_has_episode
                 )
 
                 if same_season_episode_dupe and (target_resolution.lower() not in each.lower()):
