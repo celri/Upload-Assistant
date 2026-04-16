@@ -127,44 +127,31 @@ class UNIT3D:
                         data = response.json()
                         for each in data.get("data", []):
                             if check_pending:
-                                entry_tmdb = str(each.get("tmdb_id") or "")
+                                entry_tmdb = str(each.get("tmdb_id", ""))
                                 if entry_tmdb != str(meta.get("tmdb", "")):
                                     continue
                             torrent_id = each.get("id", None)
                             attributes = each if check_pending else each.get("attributes", {})
                             name = attributes.get("name", "")
                             size = attributes.get("size", 0)
-                            result: dict[str, Any]
-                            if not meta["is_disc"]:
-                                result = {
-                                    "name": name,
-                                    "size": size,
-                                    "files": [file["name"] for file in attributes.get("files", []) if isinstance(file, dict) and "name" in file],
-                                    "file_count": (len(attributes.get("files", [])) if isinstance(attributes.get("files"), list) else 0),
-                                    "trumpable": attributes.get("trumpable", False),
-                                    "link": f"{self.base_url}/torrents/{torrent_id}" if check_pending else attributes.get("details_link", None),
-                                    "download": attributes.get("download_link", None),
-                                    "id": torrent_id,
-                                    "type": attributes.get("type", None),
-                                    "res": attributes.get("resolution", None),
-                                    "internal": attributes.get("internal", False),
-                                }
-                            else:
-                                result = {
-                                    "name": name,
-                                    "size": size,
-                                    "files": [],
-                                    "file_count": (len(attributes.get("files", [])) if isinstance(attributes.get("files"), list) else 0),
-                                    "trumpable": attributes.get("trumpable", False),
-                                    "link": f"{self.base_url}/torrents/{torrent_id}" if check_pending else attributes.get("details_link", None),
-                                    "download": attributes.get("download_link", None),
-                                    "id": torrent_id,
-                                    "type": attributes.get("type", None),
-                                    "res": attributes.get("resolution", None),
-                                    "internal": attributes.get("internal", False),
-                                    "bd_info": attributes.get("bd_info", ""),
-                                    "description": attributes.get("description", ""),
-                                }
+                            files_list = [file["name"] for file in attributes.get("files", []) if isinstance(file, dict) and "name" in file]
+                            result: dict[str, Any] = {
+                                "name": name,
+                                "size": size,
+                                "files": files_list,
+                                "file_count": (len(attributes.get("files", [])) if isinstance(attributes.get("files"), list) else 0),
+                                "trumpable": attributes.get("trumpable", False),
+                                "link": f"{self.base_url}/torrents/{torrent_id}" if check_pending else attributes.get("details_link", None),
+                                "download": attributes.get("download_link", None),
+                                "id": torrent_id,
+                                "type": attributes.get("type", None),
+                                "res": attributes.get("resolution", None),
+                                "internal": attributes.get("internal", False),
+                            }
+                            if meta["is_disc"]:
+                                result["files"] = []
+                                result["bd_info"] = attributes.get("bd_info", "")
+                                result["description"] = attributes.get("description", "")
                             dupes.append(result)
                     else:
                         console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
