@@ -113,8 +113,15 @@ class UNIT3D:
                     check_pending = False
                     if "api/torrents/pending" in url:
                         check_pending = True
-                    response = await client.get(url=url, headers=headers, params=request_params)
-                    response.raise_for_status()
+                    try:
+                        response = await client.get(url=url, headers=headers, params=request_params)
+                        response.raise_for_status()
+                    except (httpx.HTTPStatusError, httpx.RequestError) as pending_err:
+                        if check_pending:
+                            if meta.get("debug"):
+                                console.print(f"[yellow]{self.tracker}: pending endpoint error: {pending_err}[/yellow]")
+                            continue
+                        raise
 
                     if response.status_code == 200:
                         data = response.json()
@@ -135,7 +142,7 @@ class UNIT3D:
                                     "files": [file["name"] for file in attributes.get("files", []) if isinstance(file, dict) and "name" in file],
                                     "file_count": (len(attributes.get("files", [])) if isinstance(attributes.get("files"), list) else 0),
                                     "trumpable": attributes.get("trumpable", False),
-                                    "link": f"{self.base_url}/torrents/pending" if check_pending else attributes.get("details_link", None),
+                                    "link": f"{self.base_url}/torrents/{torrent_id}" if check_pending else attributes.get("details_link", None),
                                     "download": attributes.get("download_link", None),
                                     "id": torrent_id,
                                     "type": attributes.get("type", None),
@@ -149,7 +156,7 @@ class UNIT3D:
                                     "files": [],
                                     "file_count": (len(attributes.get("files", [])) if isinstance(attributes.get("files"), list) else 0),
                                     "trumpable": attributes.get("trumpable", False),
-                                    "link": f"{self.base_url}/torrents/pending" if check_pending else attributes.get("details_link", None),
+                                    "link": f"{self.base_url}/torrents/{torrent_id}" if check_pending else attributes.get("details_link", None),
                                     "download": attributes.get("download_link", None),
                                     "id": torrent_id,
                                     "type": attributes.get("type", None),

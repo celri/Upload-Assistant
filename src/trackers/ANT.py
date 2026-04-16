@@ -87,8 +87,8 @@ class ANT:
             "RMTeam",
             "SANTi",
             "SicFoI",
-            "SPASM",
             "SM737",
+            "SPASM",
             "SPDVD",
             "STUTTERSHIT",
             "TBS",
@@ -280,7 +280,7 @@ class ANT:
         else:
             mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
             async with aiofiles.open(mi_path, encoding="utf-8") as f:
-                mediainfo_output = str(await f.read())
+                mediainfo_output = await f.read()
             data.update({"mediainfo": mediainfo_output})
         if meta["scene"]:
             # ID of "Scene?" checkbox on upload form is actually "censored"
