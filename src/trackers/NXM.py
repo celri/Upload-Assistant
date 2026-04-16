@@ -569,6 +569,9 @@ class NXM(FrenchTrackerMixin):
                     except json.JSONDecodeError:
                         continue
 
+                    if not isinstance(data, dict):
+                        continue
+
                     items = data.get("torrents", data.get("data", []))
                     if not items:
                         continue
