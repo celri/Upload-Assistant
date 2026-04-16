@@ -329,6 +329,9 @@ class NXM(FrenchTrackerMixin):
                     pass  # If patching fails, upload unpatched NFO
         else:
             console.print("[yellow]NXM: No NFO available — upload may be rejected[/yellow]")
+        if not nfo_bytes:
+            meta["tracker_status"][self.tracker]["status_message"] = "NXM: missing required NFO file"
+            return False
         # ── Description ──
         description = await self._build_description(meta)
 
@@ -338,7 +341,7 @@ class NXM(FrenchTrackerMixin):
         # ── Multipart form ──
 
         tmdb_id = meta.get("tmdb_id", "")
-        tmdb_type = meta.get("category", "").lower()
+        tmdb_type = meta.get("tmdb_type", "").lower()
 
         files: dict[str, tuple[str, bytes, str]] = {
             "torrent": ("torrent.torrent", torrent_bytes, "application/x-bittorrent"),
