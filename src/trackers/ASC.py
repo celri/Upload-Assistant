@@ -122,13 +122,13 @@ class ASC:
             if local_results["season"]:
                 self.season_tmdb_data = local_results["season"]
             else:
-                tasks_to_run.append(("season", self.tmdb_manager.get_tmdb_localized_data(meta, data_type="season", language="pt-BR", append_to_response="")))
+                tasks_to_run.append(("season", self.tmdb_manager.get_tmdb_localized_data(meta, data_type="season", language="pt-BR", append_to_response="credits")))
 
         if meta.get("category") == "TV" and not meta.get("tv_pack", False):
             if local_results["episode"]:
                 self.episode_tmdb_data = local_results["episode"]
             else:
-                tasks_to_run.append(("episode", self.tmdb_manager.get_tmdb_localized_data(meta, data_type="episode", language="pt-BR", append_to_response="")))
+                tasks_to_run.append(("episode", self.tmdb_manager.get_tmdb_localized_data(meta, data_type="episode", language="pt-BR", append_to_response="credits")))
 
         if tasks_to_run:
             data_types = [item[0] for item in tasks_to_run]
@@ -523,7 +523,7 @@ class ASC:
         if custom_description_header:
             description_parts.append(custom_description_header + "\n")
 
-        description_parts.append(f"[center][url=https://github.com/yippee0903/Upload-Assistant]Upload realizado via {meta['ua_name']} {meta['current_version']}[/url][/center]")
+        description_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant]Upload realizado via {meta['ua_name']} {meta['current_version']}[/url][/center]")
 
         final_desc_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}]DESCRIPTION.txt"
         async with aiofiles.open(final_desc_path, "w", encoding="utf-8") as descfile:
