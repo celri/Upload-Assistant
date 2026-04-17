@@ -18,6 +18,7 @@ class CBR(UNIT3D):
         self.search_url = f"{self.base_url}/api/torrents/filter"
         self.torrent_url = f"{self.base_url}/torrents/"
         self.requests_url = f"{self.base_url}/api/requests/filter"
+        self.pending_url = f"{self.base_url}/api/torrents/pending"
         self.banned_groups = [
             "4K4U",
             "afm72",

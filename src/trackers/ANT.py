@@ -50,9 +50,9 @@ class ANT:
             "DeadFish",
             "ELiTE",
             "eSc",
+            "EVO",
             "FaNGDiNG0",
             "FGT",
-            "Flights",
             "FRDS",
             "FUM",
             "HAiKU",
@@ -87,6 +87,7 @@ class ANT:
             "RMTeam",
             "SANTi",
             "SicFoI",
+            "SM737",
             "SPASM",
             "SPDVD",
             "STUTTERSHIT",
@@ -109,7 +110,7 @@ class ANT:
 
     async def get_flags(self, meta: Meta) -> list[str]:
         flags: list[str] = []
-        flags.extend([each for each in ["Directors", "Extended", "Uncut", "Unrated", "4KRemaster"] if each in str(meta.get("edition", "")).replace("'", "")])
+        flags.extend([each for each in ["Directors", "Extended", "Uncut", "Unrated", "4KRemaster", "IMAX"] if each in str(meta.get("edition", "")).replace("'", "")])
         flags.extend([each.replace("-", "") for each in ["Dual-Audio", "Atmos"] if each in meta["audio"]])
         if meta.get("has_commentary", False) or meta.get("manual_commentary", False):
             flags.append("Commentary")
@@ -119,7 +120,7 @@ class ANT:
             flags.append("HDR10")
         if "DV" in meta["hdr"]:
             flags.append("DV")
-        if "Criterion" in meta.get("distributor", ""):
+        if "Criterion" in meta.get("distributor", "") or "Criterion" in meta.get("edition", ""):
             flags.append("Criterion")
         if "REMUX" in meta["type"]:
             flags.append("Remux")
@@ -267,12 +268,29 @@ class ANT:
             "api_key": str(self.tracker_config.get("api_key", "")).strip(),
             "action": "upload",
             "tmdbid": meta["tmdb"],
-            "mediainfo": await self.mediainfo(meta),
             "flags[]": flags,
             "release_desc": await self.edit_desc(meta),
         }
-        if meta["bdinfo"] is not None:
-            data.update({"media": "BluRay"})
+
+        if meta.get("is_disc", "") == "BDMV":
+            bdinfo_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
+            if not os.path.exists(bdinfo_path):
+                console.print(f"[bold red]{self.tracker}: BD_SUMMARY_00.txt not found, cannot upload.[/bold red]")
+                meta["skipping"] = self.tracker
+                return False
+            async with aiofiles.open(bdinfo_path, encoding="utf-8") as f:
+                bdinfo_output = await f.read()
+            data.update({"bdinfo": bdinfo_output})
+            data.update({"container_type": "m2ts"})
+        else:
+            mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
+            if not os.path.exists(mi_path):
+                console.print(f"[bold red]{self.tracker}: MEDIAINFO_CLEANPATH.txt not found, cannot upload.[/bold red]")
+                meta["skipping"] = self.tracker
+                return False
+            async with aiofiles.open(mi_path, encoding="utf-8") as f:
+                mediainfo_output = await f.read()
+            data.update({"mediainfo": mediainfo_output})
         if meta["scene"]:
             # ID of "Scene?" checkbox on upload form is actually "censored"
             data["censored"] = 1
@@ -440,16 +458,6 @@ class ANT:
         console.print(f"{self.tracker}: Audio will be set to 'Other'. [bold red]Correct manually if necessary.[/bold red]")
         return "Other"
 
-    async def mediainfo(self, meta: Meta) -> str:
-        if meta.get("is_disc") == "BDMV":
-            mediainfo = str(await self.common.get_bdmv_mediainfo(meta, remove=["File size", "Overall bit rate"], char_limit=100000))
-        else:
-            mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
-            async with aiofiles.open(mi_path, encoding="utf-8") as f:
-                mediainfo = str(await f.read())
-
-        return mediainfo
-
     async def edit_desc(self, meta: Meta) -> str:
         builder = DescriptionBuilder(self.tracker, self.config)
         desc_parts: list[str] = []
@@ -466,11 +474,6 @@ class ANT:
                 if logo_resize_url.endswith(".svg"):
                     logo_resize_url = logo_resize_url.replace(".svg", ".png")
                 desc_parts.append(f"[align=center][img]https://image.tmdb.org/t/p/w300/{logo_resize_url}[/img][/align]")
-
-        # BDinfo
-        bdinfo = await builder.get_bdinfo_section(meta)
-        if bdinfo:
-            desc_parts.append(f"[spoiler=BDInfo][pre]{bdinfo}[/pre][/spoiler]")
 
         if user_desc:
             # User description
@@ -530,15 +533,17 @@ class ANT:
             meta["skipping"] = "ANT"
             return dupes
 
-        params = {"apikey": api_key.strip(), "t": "search", "o": "json"}
+        params = {"t": "search", "o": "json"}
         if meta["tmdb"] != 0:
             params["tmdb"] = meta["tmdb"]
         elif int(meta["imdb_id"]) != 0:
             params["imdb"] = meta["imdb"]
 
+        headers = {"X-API-Key": api_key.strip(), "User-Agent": f"Upload Assistant/2.4 ({platform.system()} {platform.release()})"}
+
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
-                response = await client.get(url=self.search_url, params=params)
+                response = await client.get(url=self.search_url, params=params, headers=headers)
                 if response.status_code == 200:
                     try:
                         data = response.json()
@@ -612,11 +617,13 @@ class ANT:
                 console.print(f"[yellow]{self.tracker}: API key not configured, skipping file-based search.")
             return imdb_tmdb_list
 
-        params: dict[str, Any] = {"apikey": api_key.strip(), "t": "search", "filename": filename, "o": "json"}
+        headers = {"X-API-Key": api_key.strip(), "User-Agent": f"Upload Assistant/2.4 ({platform.system()} {platform.release()})"}
+
+        params: dict[str, Any] = {"t": "search", "filename": filename, "o": "json"}
 
         try:
             async with httpx.AsyncClient(timeout=15.0) as client:
-                response = await client.get(url=self.search_url, params=params)
+                response = await client.get(url=self.search_url, params=params, headers=headers)
                 if response.status_code == 200:
                     try:
                         data = response.json()

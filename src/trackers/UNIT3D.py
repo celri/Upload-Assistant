@@ -74,15 +74,16 @@ class UNIT3D:
             "perPage": "100",
         }
         params_list: Optional[ParamsList] = None
-        resolutions = await self.get_resolution_id(meta)
-        resolution_id = str(resolutions["resolution_id"])
-        if resolution_id in ["3", "4"]:
-            # Convert params to list of tuples to support duplicate keys
-            params_list = list(params_dict.items())
-            params_list.append(("resolutions[]", "3"))
-            params_list.append(("resolutions[]", "4"))
-        else:
-            params_dict["resolutions[]"] = resolution_id
+        if self.tracker not in ["OTW"]:
+            resolutions = await self.get_resolution_id(meta)
+            resolution_id = str(resolutions["resolution_id"])
+            if resolution_id in ["3", "4"]:
+                # Convert params to list of tuples to support duplicate keys
+                params_list = list(params_dict.items())
+                params_list.append(("resolutions[]", "3"))
+                params_list.append(("resolutions[]", "4"))
+            else:
+                params_dict["resolutions[]"] = resolution_id
 
         if self.tracker not in ["SP", "STC"]:
             type_id = str((await self.get_type_id(meta))["type_id"])
@@ -102,51 +103,58 @@ class UNIT3D:
         request_params: ParamsList
         request_params = params_list if params_list is not None else list(params_dict.items())
 
+        urls_to_check = [self.search_url]
+        if getattr(self, "pending_url", None):
+            urls_to_check.append(self.pending_url)
+
         try:
             async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
-                response = await client.get(url=self.search_url, headers=headers, params=request_params)
-                response.raise_for_status()
-                if response.status_code == 200:
-                    data = response.json()
-                    for each in data["data"]:
-                        torrent_id = each.get("id", None)
-                        attributes = each.get("attributes", {})
-                        name = attributes.get("name", "")
-                        size = attributes.get("size", 0)
-                        result: dict[str, Any]
-                        if not meta["is_disc"]:
-                            result = {
+                for url in urls_to_check:
+                    check_pending = False
+                    if "api/torrents/pending" in url:
+                        check_pending = True
+                    try:
+                        response = await client.get(url=url, headers=headers, params=request_params)
+                        response.raise_for_status()
+                    except (httpx.HTTPStatusError, httpx.RequestError) as pending_err:
+                        if check_pending:
+                            if meta.get("debug"):
+                                console.print(f"[yellow]{self.tracker}: pending endpoint error: {pending_err}[/yellow]")
+                            continue
+                        raise
+
+                    if response.status_code == 200:
+                        data = response.json()
+                        for each in data.get("data", []):
+                            if check_pending:
+                                entry_tmdb = str(each.get("tmdb_id", ""))
+                                if entry_tmdb != str(meta.get("tmdb", "")):
+                                    continue
+                            torrent_id = each.get("id", None)
+                            attributes = each if check_pending else each.get("attributes", {})
+                            name = attributes.get("name", "")
+                            size = attributes.get("size", 0)
+                            files_list = [file["name"] for file in attributes.get("files", []) if isinstance(file, dict) and "name" in file]
+                            result: dict[str, Any] = {
                                 "name": name,
                                 "size": size,
-                                "files": [file["name"] for file in attributes.get("files", []) if isinstance(file, dict) and "name" in file],
+                                "files": files_list,
                                 "file_count": (len(attributes.get("files", [])) if isinstance(attributes.get("files"), list) else 0),
                                 "trumpable": attributes.get("trumpable", False),
-                                "link": attributes.get("details_link", None),
+                                "link": f"{self.base_url}/torrents/{torrent_id}" if check_pending else attributes.get("details_link", None),
                                 "download": attributes.get("download_link", None),
                                 "id": torrent_id,
                                 "type": attributes.get("type", None),
                                 "res": attributes.get("resolution", None),
                                 "internal": attributes.get("internal", False),
                             }
-                        else:
-                            result = {
-                                "name": name,
-                                "size": size,
-                                "files": [],
-                                "file_count": (len(attributes.get("files", [])) if isinstance(attributes.get("files"), list) else 0),
-                                "trumpable": attributes.get("trumpable", False),
-                                "link": attributes.get("details_link", None),
-                                "download": attributes.get("download_link", None),
-                                "id": torrent_id,
-                                "type": attributes.get("type", None),
-                                "res": attributes.get("resolution", None),
-                                "internal": attributes.get("internal", False),
-                                "bd_info": attributes.get("bd_info", ""),
-                                "description": attributes.get("description", ""),
-                            }
-                        dupes.append(result)
-                else:
-                    console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
+                            if meta["is_disc"]:
+                                result["files"] = []
+                                result["bd_info"] = attributes.get("bd_info", "")
+                                result["description"] = attributes.get("description", "")
+                            dupes.append(result)
+                    else:
+                        console.print(f"[bold red]Failed to search torrents. HTTP Status: {response.status_code}")
         except httpx.HTTPStatusError as e:
             if e.response.status_code == 302:
                 meta["tracker_status"][self.tracker]["status_message"] = (
@@ -406,13 +414,12 @@ class UNIT3D:
 
     async def get_additional_files(self, meta: dict[str, Any]) -> dict[str, tuple[str, bytes, str]]:
         files: dict[str, tuple[str, bytes, str]] = {}
-
         base_dir = meta["base_dir"]
         uuid = meta["uuid"]
         specified_dir_path = os.path.join(base_dir, "tmp", uuid, "*.nfo")
-        nfo_files = self._get_nfo_files(meta) or glob.glob(specified_dir_path)
+        nfo_files = (self._get_nfo_files(meta) if hasattr(self, "_get_nfo_files") else []) or glob.glob(specified_dir_path)
         if not nfo_files and meta.get("keep_nfo", False) and (meta.get("keep_folder", False) or meta.get("isdir", False)):
-            search_dir = os.path.join(str(meta.get("path", "")))
+            search_dir = meta["path"] if os.path.isdir(meta["path"]) or meta.get("isdir", False) else os.path.dirname(meta["path"])
             nfo_files = glob.glob(os.path.join(search_dir, "*.nfo"))
 
         if nfo_files:
@@ -423,14 +430,15 @@ class UNIT3D:
         return files
 
     async def upload(self, meta: dict[str, Any], _: Any) -> bool:
-        from src.trackersetup import nfo_skip_trackers
-
         data = await self.get_data(meta)
-        # For trackers that reject .nfo files, use the no-NFO torrent if available
-        if self.tracker in nfo_skip_trackers and "base_nonfo_path" in meta:
-            torrent_file_path = meta["base_nonfo_path"]
+        base = f"{meta['base_dir']}/tmp/{meta['uuid']}"
+        nonfo_path = f"{base}/BASE_NONFO.torrent"
+        if meta.get("skip_nfo", False) and os.path.exists(nonfo_path):
+            torrent_file_path = nonfo_path
+        elif "upload_torrent_path" in meta:
+            torrent_file_path = meta["upload_torrent_path"]
         else:
-            torrent_file_path = meta.get("upload_torrent_path", f"{meta['base_dir']}/tmp/{meta['uuid']}/BASE.torrent")
+            torrent_file_path = f"{base}/BASE.torrent"
         async with aiofiles.open(torrent_file_path, "rb") as f:
             torrent_bytes = await f.read()
         files = {"torrent": ("torrent.torrent", torrent_bytes, "application/x-bittorrent")}

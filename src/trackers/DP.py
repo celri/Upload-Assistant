@@ -35,12 +35,13 @@ class DP(UNIT3D):
             "DNL",
             "eranger2",
             "FaNGDiNG0",
+            "FGT",
             "FiSTER",
             "flower",
             "GalaxyTV",
             "HD2DVD",
-            "HDT",
             "HDTime",
+            "HorribleSubs",
             "iHYTECH",
             "ION10",
             "iPlanet",
@@ -57,6 +58,7 @@ class DP(UNIT3D):
             "OFT",
             "PiTBULL",
             "PRODJi",
+            "PSA",
             "RARBG",
             "Rifftrax",
             "ROCKETRACCOON",
@@ -66,11 +68,14 @@ class DP(UNIT3D):
             "ShAaNiG",
             "Sicario",
             "STUTTERSHIT",
+            "Subsplease",
+            "SyncUp",
             "TAoE",
             "TGALAXY",
             "TGx",
             "TORRENTGALAXY",
             "ToVaR",
+            "Trix",
             "TSP",
             "TSPxL",
             "ViSION",
@@ -82,9 +87,6 @@ class DP(UNIT3D):
             "YTS",
         ]
         pass
-
-    async def get_additional_files(self, meta: dict[str, Any]) -> dict[str, tuple[str, bytes, str]]:
-        return {}
 
     async def get_additional_checks(self, meta: dict[str, Any]) -> bool:
         should_continue = True
@@ -100,11 +102,6 @@ class DP(UNIT3D):
 
         nordic_languages = ["danish", "swedish", "norwegian", "icelandic", "finnish", "english"]
         if not await self.common.check_language_requirements(meta, self.tracker, languages_to_check=nordic_languages, check_audio=True, check_subtitle=True):
-            return False
-
-        if meta["type"] == "ENCODE" and meta.get("tag", "") in ["FGT"]:
-            if not meta["unattended"]:
-                console.print(f"[bold red]{self.tracker} does not allow FGT encodes, skipping upload.")
             return False
 
         if meta["type"] not in ["WEBDL"] and meta.get("tag", "") in ["EVO"]:
