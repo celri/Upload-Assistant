@@ -3248,7 +3248,18 @@ class COMMON:
                     return False
 
             if require_both:
-                if not (audio_ok and subtitle_ok):
+                final_ok = audio_ok and subtitle_ok
+            elif check_audio and check_subtitle:
+                final_ok = audio_ok or subtitle_ok
+            elif check_audio:
+                final_ok = audio_ok
+            elif check_subtitle:
+                final_ok = subtitle_ok
+            else:
+                final_ok = True
+
+            if not final_ok:
+                if require_both:
                     console.print(
                         f"[red]Language requirement not met for [bold]{tracker}[/bold].[/red]\n"
                         f"[yellow]Required both audio and subtitles in one of the following:[/yellow] "
@@ -3256,8 +3267,7 @@ class COMMON:
                         f"[cyan]Found Audio:[/cyan] {', '.join(audio_languages) or 'None'}\n"
                         f"[cyan]Found Subtitles:[/cyan] {', '.join(subtitle_languages) or 'None'}"
                     )
-            else:
-                if not (audio_ok or subtitle_ok):
+                else:
                     console.print(
                         f"[red]Language requirement not met for [bold]{tracker}[/bold].[/red]\n"
                         f"[yellow]Required at least one of the following:[/yellow] "
@@ -3266,10 +3276,7 @@ class COMMON:
                         f"[cyan]Found Subtitles:[/cyan] {', '.join(subtitle_languages) or 'None'}"
                     )
 
-            if require_both:
-                return audio_ok and subtitle_ok
-            else:
-                return audio_ok or subtitle_ok
+            return final_ok
 
         except Exception as e:
             console.print_exception()
