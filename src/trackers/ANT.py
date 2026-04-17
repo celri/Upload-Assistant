@@ -273,12 +273,21 @@ class ANT:
         }
 
         if meta.get("is_disc", "") == "BDMV":
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding="utf-8") as f:
+            bdinfo_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt"
+            if not os.path.exists(bdinfo_path):
+                console.print(f"[bold red]{self.tracker}: BD_SUMMARY_00.txt not found, cannot upload.[/bold red]")
+                meta["skipping"] = self.tracker
+                return False
+            async with aiofiles.open(bdinfo_path, encoding="utf-8") as f:
                 bdinfo_output = await f.read()
             data.update({"bdinfo": bdinfo_output})
             data.update({"container_type": "m2ts"})
         else:
             mi_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO_CLEANPATH.txt"
+            if not os.path.exists(mi_path):
+                console.print(f"[bold red]{self.tracker}: MEDIAINFO_CLEANPATH.txt not found, cannot upload.[/bold red]")
+                meta["skipping"] = self.tracker
+                return False
             async with aiofiles.open(mi_path, encoding="utf-8") as f:
                 mediainfo_output = await f.read()
             data.update({"mediainfo": mediainfo_output})
