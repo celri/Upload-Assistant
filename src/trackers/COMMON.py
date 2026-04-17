@@ -3269,7 +3269,18 @@ class COMMON:
             if require_both:
                 return audio_ok and subtitle_ok
             else:
-                return audio_ok or subtitle_ok
+                # Only OR together the checks that are actually enabled.
+                # Using "not check_X or result" makes each term vacuously True
+                # when the check is disabled, so a plain OR would always return
+                # True when either check is skipped.
+                if check_audio and check_subtitle:
+                    return audio_ok or subtitle_ok
+                elif check_audio:
+                    return audio_ok
+                elif check_subtitle:
+                    return subtitle_ok
+                else:
+                    return True
 
         except Exception as e:
             console.print_exception()
