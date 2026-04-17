@@ -2058,6 +2058,11 @@ class TestSlotISO:
         slot = C411._determine_c411_slot_from_name('Isolation.2024.1080p.WEB-DL.AAC.2.0.H.264-GRP')
         assert slot == 'COMPAT-01'
 
+    def test_iso_not_matched_mid_name(self):
+        """'ISO' as a prefix inside a mid-name token (e.g. .Isolated.) must NOT match."""
+        slot = C411._determine_c411_slot_from_name('Movie.Isolated.2024.2160p.UHD.WEB-DL.AAC.2.0.H.264-GRP')
+        assert slot != 'PURE-UHD-ISO'
+
 
 # ─── Slot: AD special edition ────────────────────────────────
 

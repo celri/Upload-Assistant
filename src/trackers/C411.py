@@ -241,8 +241,10 @@ class C411(FrenchTrackerMixin):
     # Audio codecs that are considered lossless
     _LOSSLESS_AUDIO = {"TrueHD", "TrueHD Atmos", "DTS-HD MA", "DTS-HD.MA", "FLAC", "PCM", "LPCM", "DTS:X", "DTS-X"}
 
-    # Lossless audio markers used for name-based detection
-    _LOSSLESS_NAME_MARKERS = ("TRUEHD", "TRUE.HD", "DTS.HD.MA", "DTS.HD MA", "DTS-HD.MA", "DTSX", "DTS.X", "DTS-X", "FLAC", "LPCM", "PCM")
+    # Lossless audio markers used for name-based detection.
+    # _is_lossless_from_name normalizes the name with .upper().replace("-", "."),
+    # so markers must not contain "-" or spaces.
+    _LOSSLESS_NAME_MARKERS = ("TRUEHD", "TRUE.HD", "DTS.HD.MA", "DTSX", "DTS.X", "FLAC", "LPCM", "PCM")
 
     @staticmethod
     def _is_lossless_audio(audio: str) -> bool:
@@ -493,7 +495,7 @@ class C411(FrenchTrackerMixin):
         # Type
         is_remux = "REMUX" in n
         is_bdmv = "BDMV" in n or "BD.FULL" in n or "COMPLETE.BLURAY" in n
-        is_iso = "ISO" in n.split(".") or ".ISO" in n
+        is_iso = "ISO" in n.split(".")
         is_webrip = "WEBRIP" in n or "WEB.RIP" in n
         is_4klight = "4KLIGHT" in n
 
