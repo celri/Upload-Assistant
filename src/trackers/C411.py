@@ -254,9 +254,23 @@ class C411(FrenchTrackerMixin):
 
     @classmethod
     def _is_lossless_from_name(cls, name: str) -> bool:
-        """Return True if a torrent name contains a lossless audio marker."""
+        """Return True if a torrent name contains a lossless audio marker or is a PURE disc source.
+
+        PURE disc sources (REMUX, BDMV, full BD rips, ISO) are inherently lossless;
+        their names often omit explicit audio tokens, so we treat them as lossless
+        to avoid incorrectly filtering them in the lossy/lossless coexistence check.
+        """
         n = name.upper().replace("-", ".")
-        return any(tag in n for tag in cls._LOSSLESS_NAME_MARKERS)
+        if any(tag in n for tag in cls._LOSSLESS_NAME_MARKERS):
+            return True
+        # PURE disc-image sources (BDMV, complete BD rips, ISO) often omit explicit
+        # audio tokens in the name; treat them as inherently lossless.
+        # REMUX releases are NOT included here: they almost always carry an explicit
+        # audio token, so we rely on the audio-marker check above for those.
+        _PURE_DISC_MARKERS = ("BDMV", "BD.FULL", "COMPLETE.BLURAY")
+        if any(marker in n for marker in _PURE_DISC_MARKERS):
+            return True
+        return "ISO" in n.split(".")
 
     @staticmethod
     def _is_h264_codec(codec: str) -> bool:
@@ -320,6 +334,10 @@ class C411(FrenchTrackerMixin):
         n = name.upper().replace(".", " ").replace("-", " ").replace("_", " ")
         tokens = set(n.split())
         for tag in cls._SPECIAL_EDITIONS:
+            # "AD" is too short and ambiguous as a name token (e.g. "Ad.Astra" → token "AD");
+            # it must only be detected from structured meta, not from the raw name.
+            if tag == "AD":
+                continue
             # Short tags (≤2 chars) must match a whole token to avoid false positives
             if len(tag) <= 2:
                 if tag in tokens:
