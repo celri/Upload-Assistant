@@ -832,7 +832,7 @@ class QbittorrentClientMixin:
 
         if proxy_url:
             ssl_context = self.create_ssl_context_for_client(client)
-            qbt_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10), connector=aiohttp.TCPConnector(ssl=ssl_context))
+            qbt_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=15), connector=aiohttp.TCPConnector(ssl=ssl_context))
             qbt_proxy_url = proxy_url.rstrip("/")
         else:
             potential_qbt_client = await self.init_qbittorrent_client(client)
@@ -943,8 +943,12 @@ class QbittorrentClientMixin:
                     async with qbt_session.post(f"{qbt_proxy_url}/api/v2/torrents/add", data=fd) as r:
                         return r.status
 
-                status = await _proxy_add()
-                if status in (502, 503, 504):
+                try:
+                    status = await _proxy_add()
+                    if status in (502, 503, 504):
+                        await asyncio.sleep(3)
+                        status = await _proxy_add()
+                except (asyncio.TimeoutError, aiohttp.ClientError):
                     await asyncio.sleep(3)
                     status = await _proxy_add()
                 if status != 200:
@@ -1463,14 +1467,18 @@ class QbittorrentClientMixin:
                                 console.print(f"[cyan]Fetching torrent properties via proxy for torrent: {torrent.name}")
                             if qbt_session is None:
                                 raise RuntimeError("qbt_session should not be None")
-                            async with qbt_session.get(f"{qbt_proxy_url}/api/v2/torrents/properties", params={"hash": torrent.hash}) as response:
-                                if response.status == 200:
-                                    torrent_properties = await response.json()
-                                    torrent.comment = torrent_properties.get("comment", "")
-                                else:
-                                    if meta["debug"]:
-                                        console.print(f"[yellow]Failed to get properties for torrent {torrent.name} via proxy: {response.status}")
-                                    continue
+                            prop_status, prop_body = await self._proxy_get_with_retry(
+                                qbt_session,
+                                f"{qbt_proxy_url}/api/v2/torrents/properties",
+                                params={"hash": torrent.hash},
+                            )
+                            if prop_status == 200 and prop_body is not None:
+                                torrent_properties = prop_body
+                                torrent.comment = torrent_properties.get("comment", "")
+                            else:
+                                if meta["debug"]:
+                                    console.print(f"[yellow]Failed to get properties for torrent {torrent.name} via proxy: {prop_status}")
+                                continue
                         elif not proxy_url:
                             if qbt_client is None:
                                 raise RuntimeError("qbt_client should not be None")
