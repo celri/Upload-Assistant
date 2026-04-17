@@ -405,6 +405,11 @@ class UNIT3D:
         if exclusive_flag:
             merged["exclusive"] = exclusive_flag
 
+        # For some FRENCH UNIT3D trackers we need to upload .nfo along video files
+        # We recreate .torrent before it was read to be sent
+        if self.tracker in ["NST", "TOS", "GF", "G3MINI"]:
+            await self._recreated_torrent_if_nfo(meta, self.common, self.config, self.tracker, self.source_flag)
+
         return merged
 
     async def get_additional_files(self, meta: dict[str, Any]) -> dict[str, tuple[str, bytes, str]]:
@@ -412,7 +417,7 @@ class UNIT3D:
         base_dir = meta["base_dir"]
         uuid = meta["uuid"]
         specified_dir_path = os.path.join(base_dir, "tmp", uuid, "*.nfo")
-        nfo_files = glob.glob(specified_dir_path)
+        nfo_files = (self._get_nfo_files(meta) if hasattr(self, "_get_nfo_files") else []) or glob.glob(specified_dir_path)
         if not nfo_files and meta.get("keep_nfo", False) and (meta.get("keep_folder", False) or meta.get("isdir", False)):
             search_dir = meta["path"] if os.path.isdir(meta["path"]) or meta.get("isdir", False) else os.path.dirname(meta["path"])
             nfo_files = glob.glob(os.path.join(search_dir, "*.nfo"))
@@ -428,7 +433,12 @@ class UNIT3D:
         data = await self.get_data(meta)
         base = f"{meta['base_dir']}/tmp/{meta['uuid']}"
         nonfo_path = f"{base}/BASE_NONFO.torrent"
-        torrent_file_path = nonfo_path if meta.get("skip_nfo", False) and os.path.exists(nonfo_path) else f"{base}/BASE.torrent"
+        if meta.get("skip_nfo", False) and os.path.exists(nonfo_path):
+            torrent_file_path = nonfo_path
+        elif "upload_torrent_path" in meta:
+            torrent_file_path = meta["upload_torrent_path"]
+        else:
+            torrent_file_path = f"{base}/BASE.torrent"
         async with aiofiles.open(torrent_file_path, "rb") as f:
             torrent_bytes = await f.read()
         files = {"torrent": ("torrent.torrent", torrent_bytes, "application/x-bittorrent")}
