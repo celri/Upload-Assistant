@@ -203,19 +203,23 @@ class C411(FrenchTrackerMixin):
         return result
 
     # ──────────────────────────────────────────────────────────
-    #  C411 slot system — 4 profiles, 25 slots per edition
+    #  C411 slot system — 4 profiles, 27 slots per edition
     # ──────────────────────────────────────────────────────────
     #
     #  Compatibilité (2):    COMPAT-01, COMPAT-WR
-    #  Home Cinéma Pure (4): PURE-UHD-REMUX, PURE-UHD-BDMV, PURE-BD-REMUX, PURE-BD-BDMV
+    #  Home Cinéma Pure (6): PURE-UHD-REMUX, PURE-UHD-BDMV, PURE-UHD-ISO,
+    #                        PURE-BD-REMUX, PURE-BD-BDMV, PURE-BD-ISO
     #  Home Cinéma Optimisé (12): HCOPT-{1080,2160}-{BD,WR,4KL}-{H265,AV1}[-HDR]
     #  Optimisation (7):     OPTI-{1080,2160}-{HDR,SDR}-{BD,WR,4KL}
     #
     #  Special versions (UNCUT, THEATRICAL, EXTENDED, DIRECTOR'S CUT,
-    #  IMAX, Open Matte, Hybrid) each get an independent 25-slot set.
+    #  IMAX, Open Matte, Hybrid, AD) each get an independent 27-slot set.
     #
     #  Corrective versions (PROPER, REAL PROPER, REPACK, FIX, RERIP, V2)
     #  are always allowed — they replace the uploader's own previous version.
+    #
+    #  Lossy/Lossless coexistence: within the same slot, a lossy version
+    #  and a lossless version can permanently coexist.
     #
 
     # Special editions that get their own independent slot set
@@ -228,6 +232,7 @@ class C411(FrenchTrackerMixin):
         "IMAX",
         "OPEN MATTE",
         "HYBRID",
+        "AD",
     ]
 
     # Corrective version tags — uploads with these bypass dupe blocking
@@ -236,11 +241,36 @@ class C411(FrenchTrackerMixin):
     # Audio codecs that are considered lossless
     _LOSSLESS_AUDIO = {"TrueHD", "TrueHD Atmos", "DTS-HD MA", "DTS-HD.MA", "FLAC", "PCM", "LPCM", "DTS:X", "DTS-X"}
 
+    # Lossless audio markers used for name-based detection.
+    # _is_lossless_from_name normalizes the name with .upper().replace("-", "."),
+    # so markers must not contain "-" or spaces.
+    _LOSSLESS_NAME_MARKERS = ("TRUEHD", "TRUE.HD", "DTS.HD.MA", "DTSX", "DTS.X", "FLAC", "LPCM", "PCM")
+
     @staticmethod
     def _is_lossless_audio(audio: str) -> bool:
         """Return True if the audio codec string indicates lossless audio."""
         au = audio.upper()
         return any(tag in au for tag in ("TRUEHD", "DTS-HD MA", "DTS-HD.MA", "DTS.HD.MA", "DTSX", "DTS.X", "DTS:X", "DTS-X", "FLAC", "PCM", "LPCM"))
+
+    @classmethod
+    def _is_lossless_from_name(cls, name: str) -> bool:
+        """Return True if a torrent name contains a lossless audio marker or is a PURE disc source.
+
+        PURE disc sources (REMUX, BDMV, full BD rips, ISO) are inherently lossless;
+        their names often omit explicit audio tokens, so we treat them as lossless
+        to avoid incorrectly filtering them in the lossy/lossless coexistence check.
+        """
+        n = name.upper().replace("-", ".")
+        if any(tag in n for tag in cls._LOSSLESS_NAME_MARKERS):
+            return True
+        # PURE disc-image sources (BDMV, complete BD rips, ISO) often omit explicit
+        # audio tokens in the name; treat them as inherently lossless.
+        # REMUX releases are NOT included here: they almost always carry an explicit
+        # audio token, so we rely on the audio-marker check above for those.
+        _PURE_DISC_MARKERS = ("BDMV", "BD.FULL", "COMPLETE.BLURAY")
+        if any(marker in n for marker in _PURE_DISC_MARKERS):
+            return True
+        return "ISO" in n.split(".")
 
     @staticmethod
     def _is_h264_codec(codec: str) -> bool:
@@ -289,8 +319,12 @@ class C411(FrenchTrackerMixin):
         edition = str(meta.get("edition", "")).upper()
         if not edition:
             return ""
+        tokens = set(edition.replace(".", " ").replace("-", " ").replace("_", " ").split())
         for tag in cls._SPECIAL_EDITIONS:
-            if tag in edition:
+            if len(tag) <= 2:
+                if tag in tokens:
+                    return tag.replace("'", "").replace(" ", "-")
+            elif tag in edition:
                 return tag.replace("'", "").replace(" ", "-")
         return ""
 
@@ -298,8 +332,17 @@ class C411(FrenchTrackerMixin):
     def _detect_special_edition_from_name(cls, name: str) -> str:
         """Return normalised edition key parsed from a torrent name, or ''."""
         n = name.upper().replace(".", " ").replace("-", " ").replace("_", " ")
+        tokens = set(n.split())
         for tag in cls._SPECIAL_EDITIONS:
-            if tag in n:
+            # "AD" is too short and ambiguous as a name token (e.g. "Ad.Astra" → token "AD");
+            # it must only be detected from structured meta, not from the raw name.
+            if tag == "AD":
+                continue
+            # Short tags (≤2 chars) must match a whole token to avoid false positives
+            if len(tag) <= 2:
+                if tag in tokens:
+                    return tag.replace("'", "").replace(" ", "-")
+            elif tag in n:
                 return tag.replace("'", "").replace(" ", "-")
         return ""
 
@@ -403,9 +446,11 @@ class C411(FrenchTrackerMixin):
         edition = self._detect_special_edition_from_meta(meta)
         prefix = f"{edition}|" if edition else ""
 
-        # ── PURE: REMUX / BDMV (lossless, no encoding) ──
+        # ── PURE: REMUX / BDMV / ISO (lossless, no encoding) ──
         if release_type == "REMUX":
             return f"{prefix}PURE-UHD-REMUX" if is_4k else f"{prefix}PURE-BD-REMUX"
+        if is_disc == "ISO":
+            return f"{prefix}PURE-UHD-ISO" if is_4k else f"{prefix}PURE-BD-ISO"
         if release_type == "DISC" or is_disc == "BDMV":
             return f"{prefix}PURE-UHD-BDMV" if is_4k else f"{prefix}PURE-BD-BDMV"
 
@@ -468,6 +513,7 @@ class C411(FrenchTrackerMixin):
         # Type
         is_remux = "REMUX" in n
         is_bdmv = "BDMV" in n or "BD.FULL" in n or "COMPLETE.BLURAY" in n
+        is_iso = "ISO" in n.split(".")
         is_webrip = "WEBRIP" in n or "WEB.RIP" in n
         is_4klight = "4KLIGHT" in n
 
@@ -492,6 +538,8 @@ class C411(FrenchTrackerMixin):
         # ── PURE ──
         if is_remux:
             return f"{prefix}PURE-UHD-REMUX" if is_4k else f"{prefix}PURE-BD-REMUX"
+        if is_iso:
+            return f"{prefix}PURE-UHD-ISO" if is_4k else f"{prefix}PURE-BD-ISO"
         if is_bdmv:
             return f"{prefix}PURE-UHD-BDMV" if is_4k else f"{prefix}PURE-BD-BDMV"
 
@@ -1742,6 +1790,18 @@ class C411(FrenchTrackerMixin):
                             console.print(
                                 f"[cyan]C411 coexistence: HDR-only upload — {before - len(dupes)} DV-only dupe(s) removed (temporary coexistence, no DV.HDR10 found)[/cyan]"
                             )
+
+        # ── Lossy / Lossless coexistence (permanent) ──
+        # A lossy version and a lossless version can always coexist in the same slot.
+        if dupes:
+            upload_audio = str(meta.get("audio", ""))
+            upload_lossless = self._is_lossless_audio(upload_audio)
+            before = len(dupes)
+            dupes = [d for d in dupes if self._is_lossless_from_name(d.get("name", "")) == upload_lossless]
+            if meta.get("debug") and len(dupes) < before:
+                kind = "lossless" if upload_lossless else "lossy"
+                opposite = "lossy" if upload_lossless else "lossless"
+                console.print(f"[cyan]C411 coexistence: {kind} upload — {before - len(dupes)} {opposite} dupe(s) removed (permanent coexistence)[/cyan]")
 
         # ── Tag dupes with slot for display ──
         for dupe in dupes:

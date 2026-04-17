@@ -2020,3 +2020,339 @@ class TestC411GetMediainfoText:
         meta["mediainfo_text"] = "fallback MI"
         result = asyncio.run(c._get_mediainfo_text(meta))
         assert result == "fallback MI"
+
+
+# ─── Slot: ISO ────────────────────────────────────────────────
+
+
+class TestSlotISO:
+    """PURE-UHD-ISO and PURE-BD-ISO slots."""
+
+    def test_iso_uhd_from_meta(self):
+        c = C411(_config())
+        meta = _meta_base(type='DISC', is_disc='ISO', resolution='2160p')
+        meta['uhd'] = 'UHD'
+        slot = c._determine_c411_slot(meta)
+        assert slot == 'PURE-UHD-ISO'
+
+    def test_iso_bd_from_meta(self):
+        c = C411(_config())
+        meta = _meta_base(type='DISC', is_disc='ISO', resolution='1080p')
+        slot = c._determine_c411_slot(meta)
+        assert slot == 'PURE-BD-ISO'
+
+    def test_iso_uhd_from_name(self):
+        slot = C411._determine_c411_slot_from_name('Movie.2024.2160p.UHD.BluRay.ISO.DTS-HD.MA.7.1-GRP')
+        assert slot == 'PURE-UHD-ISO'
+
+    def test_iso_bd_from_name(self):
+        slot = C411._determine_c411_slot_from_name('Movie.2024.1080p.BluRay.ISO.DTS-HD.MA.5.1-GRP')
+        assert slot == 'PURE-BD-ISO'
+
+    def test_bdmv_not_matched_as_iso(self):
+        slot = C411._determine_c411_slot_from_name('Movie.2024.2160p.UHD.BDMV.DTS-HD.MA.7.1-GRP')
+        assert slot == 'PURE-UHD-BDMV'
+
+    def test_iso_not_matched_in_word(self):
+        """'ISO' embedded in another word (e.g. ISOLATION) should NOT match as ISO disc."""
+        slot = C411._determine_c411_slot_from_name('Isolation.2024.1080p.WEB-DL.AAC.2.0.H.264-GRP')
+        assert slot == 'COMPAT-01'
+
+    def test_iso_not_matched_mid_name(self):
+        """'ISO' as a prefix inside a mid-name token (e.g. .Isolated.) must NOT match."""
+        slot = C411._determine_c411_slot_from_name('Movie.Isolated.2024.2160p.UHD.WEB-DL.AAC.2.0.H.264-GRP')
+        assert slot != 'PURE-UHD-ISO'
+
+
+# ─── Slot: AD special edition ────────────────────────────────
+
+
+class TestSlotADEdition:
+    """AD (Audio Description) as a special edition with independent slot set."""
+
+    def test_ad_from_meta(self):
+        c = C411(_config())
+        meta = _meta_base(edition='AD', resolution='1080p')
+        slot = c._determine_c411_slot(meta)
+        assert slot == 'AD|COMPAT-01'
+
+    def test_ad_from_name(self):
+        # "AD" is intentionally skipped in name-based detection (too ambiguous as a token).
+        # Only meta-based detection sets the AD edition prefix.
+        slot = C411._determine_c411_slot_from_name('Movie.2024.AD.FRENCH.1080p.WEB.x264-GRP')
+        assert slot == 'COMPAT-01'
+
+    def test_ad_not_in_word(self):
+        """AD embedded in another word should NOT trigger special edition."""
+        slot = C411._determine_c411_slot_from_name('Adrenaline.2024.FRENCH.1080p.WEB.x264-GRP')
+        assert slot == 'COMPAT-01'
+
+    def test_ad_4k_remux(self):
+        c = C411(_config())
+        meta = _meta_base(edition='AD', type='REMUX', resolution='2160p')
+        meta['uhd'] = 'UHD'
+        slot = c._determine_c411_slot(meta)
+        assert slot == 'AD|PURE-UHD-REMUX'
+
+
+# ─── Lossy / Lossless coexistence ────────────────────────────
+
+
+class TestLossyLosslessCoexistence:
+    """Lossy and lossless versions permanently coexist in the same slot."""
+
+    TORZNAB_LOSSLESS = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:torznab="http://torznab.com/schemas/2015/feed">
+  <channel>
+    <item>
+      <title>Movie.2024.FRENCH.2160p.UHD.BluRay.REMUX.DTS-HD.MA.7.1-GRP</title>
+      <guid>https://c411.org/torrents/200</guid>
+      <link>https://c411.org/torrents/200/download</link>
+      <size>40000000000</size>
+    </item>
+  </channel>
+</rss>"""
+
+    TORZNAB_LOSSY = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:torznab="http://torznab.com/schemas/2015/feed">
+  <channel>
+    <item>
+      <title>Movie.2024.FRENCH.2160p.UHD.BluRay.REMUX.AC3.5.1-GRP</title>
+      <guid>https://c411.org/torrents/201</guid>
+      <link>https://c411.org/torrents/201/download</link>
+      <size>30000000000</size>
+    </item>
+  </channel>
+</rss>"""
+
+    TORZNAB_BOTH = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:torznab="http://torznab.com/schemas/2015/feed">
+  <channel>
+    <item>
+      <title>Movie.2024.FRENCH.2160p.UHD.BluRay.REMUX.DTS-HD.MA.7.1-GRP</title>
+      <guid>https://c411.org/torrents/200</guid>
+      <link>https://c411.org/torrents/200/download</link>
+      <size>40000000000</size>
+    </item>
+    <item>
+      <title>Movie.2024.FRENCH.2160p.UHD.BluRay.REMUX.AC3.5.1-GRP2</title>
+      <guid>https://c411.org/torrents/201</guid>
+      <link>https://c411.org/torrents/201/download</link>
+      <size>30000000000</size>
+    </item>
+  </channel>
+</rss>"""
+
+    def _make_mock(self, xml_text):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = xml_text
+        return mock_response
+
+    def test_lossy_upload_lossless_dupe_coexist(self):
+        """A lossy upload should NOT be blocked by a lossless dupe in the same slot."""
+        c = C411(_config())
+        meta = _meta_base(
+            type='REMUX', resolution='2160p', audio='AC3',
+            video_encode='', hdr='',
+        )
+        meta['uhd'] = 'UHD'
+        meta['is_disc'] = None
+
+        with patch('httpx.AsyncClient') as mock_cls:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=self._make_mock(self.TORZNAB_LOSSLESS))
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_cls.return_value = mock_client
+
+            dupes = asyncio.run(c.search_existing(meta, 'nodisc'))
+
+        assert dupes == [], "Lossy upload should coexist with lossless dupe"
+
+    def test_lossless_upload_lossy_dupe_coexist(self):
+        """A lossless upload should NOT be blocked by a lossy dupe in the same slot."""
+        c = C411(_config())
+        meta = _meta_base(
+            type='REMUX', resolution='2160p', audio='DTS-HD MA',
+            video_encode='', hdr='',
+        )
+        meta['uhd'] = 'UHD'
+        meta['is_disc'] = None
+
+        with patch('httpx.AsyncClient') as mock_cls:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=self._make_mock(self.TORZNAB_LOSSY))
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_cls.return_value = mock_client
+
+            dupes = asyncio.run(c.search_existing(meta, 'nodisc'))
+
+        assert dupes == [], "Lossless upload should coexist with lossy dupe"
+
+    def test_lossless_upload_lossless_dupe_blocks(self):
+        """A lossless upload should be blocked by an existing lossless dupe."""
+        c = C411(_config())
+        meta = _meta_base(
+            type='REMUX', resolution='2160p', audio='DTS-HD MA',
+            video_encode='', hdr='',
+        )
+        meta['uhd'] = 'UHD'
+        meta['is_disc'] = None
+
+        with patch('httpx.AsyncClient') as mock_cls:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=self._make_mock(self.TORZNAB_LOSSLESS))
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_cls.return_value = mock_client
+
+            dupes = asyncio.run(c.search_existing(meta, 'nodisc'))
+
+        assert len(dupes) == 1, "Lossless upload should be blocked by lossless dupe"
+
+    def test_lossy_upload_lossy_dupe_blocks(self):
+        """A lossy upload should be blocked by an existing lossy dupe."""
+        c = C411(_config())
+        meta = _meta_base(
+            type='REMUX', resolution='2160p', audio='AC3',
+            video_encode='', hdr='',
+        )
+        meta['uhd'] = 'UHD'
+        meta['is_disc'] = None
+
+        with patch('httpx.AsyncClient') as mock_cls:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=self._make_mock(self.TORZNAB_LOSSY))
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_cls.return_value = mock_client
+
+            dupes = asyncio.run(c.search_existing(meta, 'nodisc'))
+
+        assert len(dupes) == 1, "Lossy upload should be blocked by lossy dupe"
+
+    def test_lossy_upload_mixed_dupes_filters_lossless(self):
+        """When both lossy and lossless dupes exist, only same-type blocks."""
+        c = C411(_config())
+        meta = _meta_base(
+            type='REMUX', resolution='2160p', audio='AC3',
+            video_encode='', hdr='',
+        )
+        meta['uhd'] = 'UHD'
+        meta['is_disc'] = None
+
+        with patch('httpx.AsyncClient') as mock_cls:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=self._make_mock(self.TORZNAB_BOTH))
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_cls.return_value = mock_client
+
+            dupes = asyncio.run(c.search_existing(meta, 'nodisc'))
+
+        assert len(dupes) == 1, "Only same audio type should block"
+        assert 'AC3' in dupes[0]['name']
+
+    def test_is_lossless_from_name_truehd(self):
+        assert C411._is_lossless_from_name('Movie.2024.1080p.BluRay.REMUX.TrueHD.7.1-GRP') is True
+
+    def test_is_lossless_from_name_dtshd_ma(self):
+        assert C411._is_lossless_from_name('Movie.2024.1080p.BluRay.REMUX.DTS-HD.MA.5.1-GRP') is True
+
+    def test_is_lossless_from_name_flac(self):
+        assert C411._is_lossless_from_name('Movie.2024.1080p.BluRay.REMUX.FLAC.2.0-GRP') is True
+
+    def test_is_lossless_from_name_ac3_is_lossy(self):
+        assert C411._is_lossless_from_name('Movie.2024.1080p.BluRay.REMUX.AC3.5.1-GRP') is False
+
+    def test_is_lossless_from_name_aac_is_lossy(self):
+        assert C411._is_lossless_from_name('Movie.2024.1080p.WEB-DL.AAC.2.0.H.264-GRP') is False
+
+    def test_is_lossless_from_name_remux_no_audio_token(self):
+        """A REMUX name with no explicit audio tag falls back to False (unknown).
+        REMUX releases should always have audio in the name; BDMV/ISO are the ones
+        that legitimately omit audio tokens and are treated as lossless.
+        """
+        assert C411._is_lossless_from_name('Movie.2024.2160p.UHD.BluRay.REMUX.H265-GRP') is False
+
+    def test_is_lossless_from_name_bdmv_no_audio_token(self):
+        """A BDMV name with no explicit audio tag is treated as lossless (PURE disc)."""
+        assert C411._is_lossless_from_name('Movie.2024.2160p.UHD.BDMV-GRP') is True
+
+    def test_is_lossless_from_name_iso_no_audio_token(self):
+        """An ISO name with no explicit audio tag is treated as lossless (PURE disc)."""
+        assert C411._is_lossless_from_name('Movie.2024.2160p.UHD.BluRay.ISO-GRP') is True
+
+    def test_is_lossless_from_name_complete_bluray_no_audio_token(self):
+        """A COMPLETE.BLURAY name with no explicit audio tag is treated as lossless."""
+        assert C411._is_lossless_from_name('Movie.2024.Complete.Bluray-GRP') is True
+
+    def test_pure_bdmv_dupe_not_filtered_when_upload_is_lossless(self):
+        """A lossless BDMV upload must NOT silently drop a PURE-BD-BDMV dupe whose
+        name has no explicit audio token (disc images rarely include audio in the name).
+        Before the fix, _is_lossless_from_name returned False for such names, causing
+        the dupe to be incorrectly filtered by the lossy/lossless coexistence check.
+        """
+        c = C411(_config())
+        # Upload is a PURE-BD-BDMV (is_disc=BDMV, 1080p, lossless audio from meta)
+        meta = _meta_base(
+            type='DISC', resolution='1080p', audio='DTS-HD MA',
+            video_encode='', hdr='',
+        )
+        meta['is_disc'] = 'BDMV'
+
+        # Dupe is another BDMV in the same slot but without any audio token in the name
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:torznab="http://torznab.com/schemas/2015/feed">
+  <channel>
+    <item>
+      <title>Movie.2024.FRENCH.1080p.BDMV-GRP</title>
+      <guid>https://c411.org/torrents/300</guid>
+      <link>https://c411.org/torrents/300/download</link>
+      <size>50000000000</size>
+    </item>
+  </channel>
+</rss>"""
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.text = xml
+
+        with patch('httpx.AsyncClient') as mock_cls:
+            mock_client = AsyncMock()
+            mock_client.get = AsyncMock(return_value=mock_response)
+            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+            mock_client.__aexit__ = AsyncMock(return_value=None)
+            mock_cls.return_value = mock_client
+
+            dupes = asyncio.run(c.search_existing(meta, 'nodisc'))
+
+        assert len(dupes) == 1, "PURE-BD-BDMV dupe must not be silently dropped by lossless filter"
+
+
+# ─── AD false positive: Ad.Astra regression ──────────────────
+
+
+class TestADFalsePositiveRegression:
+    """'AD' in a title like 'Ad.Astra' must NOT be detected as the Audio Description edition."""
+
+    def test_ad_astra_no_edition(self):
+        edition = C411._detect_special_edition_from_name(
+            'Ad.Astra.2019.2160p.UHD.BluRay.TrueHD.7.1.Atmos.HDR.H.265-GRP'
+        )
+        assert edition != 'AD', f"'Ad.Astra' must not trigger AD edition, got {edition!r}"
+
+    def test_ad_astra_slot_has_no_prefix(self):
+        slot = C411._determine_c411_slot_from_name(
+            'Ad.Astra.2019.2160p.UHD.BluRay.TrueHD.7.1.Atmos.HDR.H.265-GRP'
+        )
+        assert not slot.startswith('AD|'), f"Ad.Astra slot must not start with 'AD|', got {slot!r}"
+
+    def test_ad_from_meta_still_works(self):
+        """meta-based AD detection must still work after the name-based guard."""
+        c = C411(_config())
+        meta = _meta_base(edition='AD', resolution='1080p')
+        slot = c._determine_c411_slot(meta)
+        assert slot == 'AD|COMPAT-01'
