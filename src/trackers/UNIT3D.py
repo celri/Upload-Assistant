@@ -412,12 +412,22 @@ class UNIT3D:
 
         return merged
 
+    def _get_nfo_files(self, _meta: dict[str, Any]) -> list[str]:
+        """Return NFO files to attach to the upload.
+
+        Subclasses (e.g. FrenchTrackerMixin) may override this to scan the
+        release directory and update meta['keep_nfo'].  The base implementation
+        returns an empty list so that UNIT3D's generic fallback path (glob on
+        tmp/<uuid>/*.nfo) is used instead.
+        """
+        return []
+
     async def get_additional_files(self, meta: dict[str, Any]) -> dict[str, tuple[str, bytes, str]]:
         files: dict[str, tuple[str, bytes, str]] = {}
         base_dir = meta["base_dir"]
         uuid = meta["uuid"]
         specified_dir_path = os.path.join(base_dir, "tmp", uuid, "*.nfo")
-        nfo_files = (self._get_nfo_files(meta) if hasattr(self, "_get_nfo_files") else []) or glob.glob(specified_dir_path)
+        nfo_files = self._get_nfo_files(meta) or glob.glob(specified_dir_path)
         if not nfo_files and meta.get("keep_nfo", False) and (meta.get("keep_folder", False) or meta.get("isdir", False)):
             search_dir = meta["path"] if os.path.isdir(meta["path"]) or meta.get("isdir", False) else os.path.dirname(meta["path"])
             nfo_files = glob.glob(os.path.join(search_dir, "*.nfo"))
