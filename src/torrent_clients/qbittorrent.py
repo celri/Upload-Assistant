@@ -20,6 +20,7 @@ from torf import Torrent
 from cogs.redaction import Redaction
 from src.console import console
 from src.torrentcreate import TorrentCreator
+from src.trackersetup import nfo_skip_trackers
 
 # These have to be global variables to be shared across all instances since a new instance is made every time
 qbittorrent_cached_clients: dict[tuple[str, int, str], qbittorrentapi.Client] = {}  # Cache for qbittorrent clients that have been successfully logged into
@@ -809,11 +810,13 @@ class QbittorrentClientMixin:
             await asyncio.to_thread(os.makedirs, tracker_dir, exist_ok=True)
 
             if cross:
-                linking_success = await create_cross_seed_links(meta=meta, torrent=torrent, tracker_dir=tracker_dir, use_hardlink=use_hardlink)
+                linking_success = await create_cross_seed_links(meta=meta, torrent=torrent, tracker_dir=tracker_dir, use_hardlink=use_hardlink, tracker=tracker)
             else:
                 src_name = os.path.basename(src.rstrip(os.sep))
                 dst = os.path.join(tracker_dir, src_name)
-                linking_success = await async_link_directory(src=src, dst=dst, use_hardlink=use_hardlink, debug=meta.get("debug", False), skip_nfo=meta.get("skip_nfo", False))
+                # Per-tracker skip_nfo: only skip NFO for trackers that don't want it
+                tracker_skip_nfo = tracker.upper() in nfo_skip_trackers
+                linking_success = await async_link_directory(src=src, dst=dst, use_hardlink=use_hardlink, debug=meta.get("debug", False), skip_nfo=tracker_skip_nfo)
 
             allow_fallback = client.get("allow_fallback", True)
             if not linking_success and allow_fallback:
@@ -1984,7 +1987,7 @@ async def match_tracker_url(tracker_urls: list[str], meta: dict[str, Any]) -> No
         console.print(f"[bold cyan]Storing matched tracker IDs for later removal: {remove_trackers}")
 
 
-async def create_cross_seed_links(meta: dict[str, Any], torrent: Torrent, tracker_dir: str, use_hardlink: bool) -> bool:
+async def create_cross_seed_links(meta: dict[str, Any], torrent: Torrent, tracker_dir: str, use_hardlink: bool, tracker: str = "") -> bool:
     debug = meta.get("debug", False)
     metainfo_raw = getattr(torrent, "metainfo", {})
     metainfo: dict[str, Any] = cast(dict[str, Any], metainfo_raw) if isinstance(metainfo_raw, dict) else cast(dict[str, Any], {})
@@ -2119,7 +2122,8 @@ async def create_cross_seed_links(meta: dict[str, Any], torrent: Torrent, tracke
 
         return None, None
 
-    skip_nfo = meta.get("skip_nfo", False)
+    # Per-tracker skip_nfo: only skip NFO for trackers that don't want it
+    skip_nfo = tracker.upper() in nfo_skip_trackers if tracker else meta.get("skip_nfo", False)
     for torrent_file in torrent_files:
         relative_path = torrent_file["relative_path"]
 
