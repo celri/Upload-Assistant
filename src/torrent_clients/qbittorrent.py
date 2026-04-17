@@ -27,6 +27,7 @@ qbittorrent_locks: collections.defaultdict[tuple[str, int, str], asyncio.Lock] =
     asyncio.Lock
 )  # Locks for qbittorrent clients to prevent concurrent logins
 _qbit_health_cache: dict[str, bool] = {}  # Cached reachability per client URL (resets on restart)
+_qbit_user_decision_cache: dict[str, bool] = {}  # Cached user proceed-anyway decision per client URL
 
 
 class _CandidateEntry(TypedDict):
@@ -281,12 +282,19 @@ class QbittorrentClientMixin:
         if _qbit_health_cache[cache_key]:
             return True
 
+        # Return cached user decision if already asked this session
+        if cache_key in _qbit_user_decision_cache:
+            return _qbit_user_decision_cache[cache_key]
+
         target = Redaction.redact_private_info(proxy_url) if proxy_url else f"{client.get('qbit_url')}:{client.get('qbit_port')}"
         console.print(f"[bold red]qBittorrent appears to be offline or unreachable ({target}).")
         if meta.get("unattended"):
             console.print("[yellow]Unattended mode: skipping qBittorrent operation.")
+            _qbit_user_decision_cache[cache_key] = False
             return False
-        return cli_ui.ask_yes_no("Proceed anyway?", default=False)
+        decision = await asyncio.to_thread(cli_ui.ask_yes_no, "Proceed anyway?", default=False)
+        _qbit_user_decision_cache[cache_key] = decision
+        return decision
 
     async def _proxy_get_with_retry(
         self,
