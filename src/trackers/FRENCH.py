@@ -1824,13 +1824,16 @@ class FrenchTrackerMixin:
 
         Used by French trackers to include NFO files in .torrent and API upload."""
         path = str(meta.get("path", ""))
-        search_dir = path if os.path.isdir(path) else os.path.dirname(path)
-        if not search_dir:
-            return []
-        # Search top-level first, then subdirectories (season packs)
-        nfo_files = glob.glob(os.path.join(search_dir, "*.nfo"))
-        if not nfo_files:
-            nfo_files = glob.glob(os.path.join(search_dir, "**", "*.nfo"), recursive=True)
+        if os.path.isdir(path):
+            # Directory release: search top-level first, then subdirectories (season packs)
+            nfo_files = glob.glob(os.path.join(path, "*.nfo"))
+            if not nfo_files:
+                nfo_files = glob.glob(os.path.join(path, "**", "*.nfo"), recursive=True)
+        else:
+            # Single-file release: only match an NFO with the same base name
+            stem = os.path.splitext(path)[0]
+            nfo_path = f"{stem}.nfo"
+            nfo_files = [nfo_path] if os.path.isfile(nfo_path) else []
         if nfo_files:
             meta["keep_nfo"] = True
         return nfo_files
