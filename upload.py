@@ -427,7 +427,7 @@ async def validate_tracker_logins(meta: Meta, trackers: Optional[list[str]] = No
         await asyncio.gather(*[validate_single_tracker(tracker) for tracker in valid_trackers])
 
 
-async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
+async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> Optional[bool]:
     """Process the metadata for each queued path."""
     if use_discord and bot:
         await DiscordNotifier.send_discord_notification(config, bot, f"Starting upload process for: {meta['path']}", debug=meta.get("debug", False), meta=meta)
@@ -1285,6 +1285,8 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
             reuse_torrent = None
             if meta.get("rehash", False) is False and not meta["base_torrent_created"] and not meta["we_checked_them_all"]:
                 reuse_torrent = await client.find_existing_torrent(meta)
+                if meta.get("qbit_offline_abort"):
+                    return False
                 if reuse_torrent is not None:
                     reuse_success = await TorrentCreator.create_base_from_existing_torrent(reuse_torrent, meta["base_dir"], meta["uuid"], meta["path"])
                     if not reuse_success:
@@ -1356,6 +1358,8 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
 
         async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/meta.json", "w", encoding="utf-8") as f:
             await f.write(json.dumps(meta, indent=4))
+
+        return True
 
 
 async def cleanup_screenshot_temp_files(meta: Meta) -> None:
@@ -1816,6 +1820,9 @@ async def do_the_thing(base_dir: str) -> None:
             console.print(f"[green]Gathering info for {os.path.basename(path)}")
 
             await process_meta(meta, base_dir, bot=bot)
+            if meta.get("qbit_offline_abort"):
+                console.print("[bold red]Upload process aborted: qBittorrent is offline.")
+                return
             tracker_setup = TRACKER_SETUP(config=config)
             if "we_are_uploading" not in meta or not meta.get("we_are_uploading", False):
                 if config["DEFAULT"].get("cross_seeding", True):
