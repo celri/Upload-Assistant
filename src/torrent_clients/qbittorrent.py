@@ -685,7 +685,19 @@ class QbittorrentClientMixin:
                 path = os.path.dirname(path)
 
         # Get the appropriate source path
-        src = meta["filelist"][0] if len(meta["filelist"]) == 1 and os.path.isfile(meta["filelist"][0]) and not meta.get("keep_folder") else meta.get("path")
+        # When NFO files are included for this tracker the torrent was created
+        # in folder mode (mkv + nfo), so we must also hardlink the whole folder
+        # rather than collapsing to a single video file.
+        tracker_wants_nfo = meta.get("keep_nfo") and tracker.upper() not in nfo_skip_trackers
+        single_file = len(meta["filelist"]) == 1 and os.path.isfile(meta["filelist"][0])
+        if single_file and not meta.get("keep_folder") and not tracker_wants_nfo:
+            src = meta["filelist"][0]
+        else:
+            src = meta.get("path")
+            # When forcing folder mode for NFO, path must point to the parent
+            # directory (save_path for qBit) not the folder itself.
+            if single_file and tracker_wants_nfo and not meta.get("keep_folder"):
+                path = os.path.dirname(path)
 
         if not src:
             error_msg = "[red]No source path found in meta."
