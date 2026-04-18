@@ -696,7 +696,9 @@ class QbittorrentClientMixin:
             src = meta.get("path")
             # When forcing folder mode for NFO, path must point to the parent
             # directory (save_path for qBit) not the folder itself.
-            if single_file and tracker_wants_nfo and not meta.get("keep_folder"):
+            # Guard with os.path.isdir(path) to avoid moving to grandparent
+            # when path was already adjusted to the parent above.
+            if single_file and tracker_wants_nfo and not meta.get("keep_folder") and os.path.isdir(path):
                 path = os.path.dirname(path)
 
         if not src:
