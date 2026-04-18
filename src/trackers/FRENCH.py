@@ -1913,22 +1913,25 @@ class FrenchTrackerMixin:
         from torf import Torrent
 
         # Bail out if any NFO file already exists in the source torrent
-        existing_names = {f_info["path"][-1] for f_info in old_files if f_info.get("path")}
-        for nfo_path in nfo_files:
-            if os.path.basename(nfo_path) in existing_names:
-                return None
+        existing_rel_paths = {tuple(f_info["path"]) for f_info in old_files if f_info.get("path")}
 
         # Read NFO file data and build new file entries (appended at end)
         nfo_entries: list[dict[str, Any]] = []
         nfo_data = b""
         for nfo_path in sorted(nfo_files):
-            nfo_name = os.path.basename(nfo_path)
+            # Compute path components relative to content_path
+            rel = os.path.relpath(nfo_path, content_path)
+            path_components = rel.replace("\\", "/").split("/")
+
+            if tuple(path_components) in existing_rel_paths:
+                return None
+
             try:
                 with open(nfo_path, "rb") as f:  # noqa: ASYNC230
                     data = f.read()
             except Exception:
                 return None
-            nfo_entries.append({"length": len(data), "path": [nfo_name]})
+            nfo_entries.append({"length": len(data), "path": path_components})
             nfo_data += data
 
         if not nfo_data:
