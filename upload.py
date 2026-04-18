@@ -427,7 +427,7 @@ async def validate_tracker_logins(meta: Meta, trackers: Optional[list[str]] = No
         await asyncio.gather(*[validate_single_tracker(tracker) for tracker in valid_trackers])
 
 
-async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> bool:
+async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> Optional[bool]:
     """Process the metadata for each queued path."""
     if use_discord and bot:
         await DiscordNotifier.send_discord_notification(config, bot, f"Starting upload process for: {meta['path']}", debug=meta.get("debug", False), meta=meta)
@@ -1286,7 +1286,6 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> bool:
             if meta.get("rehash", False) is False and not meta["base_torrent_created"] and not meta["we_checked_them_all"]:
                 reuse_torrent = await client.find_existing_torrent(meta)
                 if meta.get("qbit_offline_abort"):
-                    console.print("[bold red]Aborting: qBittorrent is offline and user chose not to proceed.")
                     return False
                 if reuse_torrent is not None:
                     reuse_success = await TorrentCreator.create_base_from_existing_torrent(reuse_torrent, meta["base_dir"], meta["uuid"], meta["path"])
