@@ -517,12 +517,14 @@ class QbittorrentClientMixin:
 
                 matching_torrents.append({"hash": torrent.hash, "name": torrent.name})
 
-            console.print(f"[cyan]DEBUG: Checked {torrent_count} total torrents in qBittorrent[/cyan]")
+            if meta["debug"]:
+                console.print(f"[cyan]DEBUG: Checked {torrent_count} total torrents in qBittorrent[/cyan]")
             if not matching_torrents:
                 console.print("[yellow]No matching torrents found in qBittorrent.")
                 return None
 
-            console.print(f"[green]Total Matching Torrents: {len(matching_torrents)}")
+            if meta["debug"]:
+                console.print(f"[cyan]Total Matching Torrents: {len(matching_torrents)}[/cyan]")
 
             # **Step 2: Extract and Save .torrent Files**
             processed_hashes: set[str] = set()
@@ -653,7 +655,6 @@ class QbittorrentClientMixin:
                 console.print(f"[green]Using best match torrent with hash: {best_match['hash']}")
                 result = str(best_match["hash"]) if "hash" in best_match else None
             else:
-                console.print("[yellow]No valid torrents found.")
                 result = None
 
             return result
@@ -685,7 +686,21 @@ class QbittorrentClientMixin:
                 path = os.path.dirname(path)
 
         # Get the appropriate source path
-        src = meta["filelist"][0] if len(meta["filelist"]) == 1 and os.path.isfile(meta["filelist"][0]) and not meta.get("keep_folder") else meta.get("path")
+        # When NFO files are included for this tracker the torrent was created
+        # in folder mode (mkv + nfo), so we must also hardlink the whole folder
+        # rather than collapsing to a single video file.
+        tracker_wants_nfo = meta.get("keep_nfo") and tracker.upper() not in nfo_skip_trackers
+        single_file = len(meta["filelist"]) == 1 and os.path.isfile(meta["filelist"][0])
+        if single_file and not meta.get("keep_folder") and not tracker_wants_nfo:
+            src = meta["filelist"][0]
+        else:
+            src = meta.get("path")
+            # When forcing folder mode for NFO, path must point to the parent
+            # directory (save_path for qBit) not the folder itself.
+            # Guard with os.path.isdir(path) to avoid moving to grandparent
+            # when path was already adjusted to the parent above.
+            if single_file and tracker_wants_nfo and not meta.get("keep_folder") and os.path.isdir(path):
+                path = os.path.dirname(path)
 
         if not src:
             error_msg = "[red]No source path found in meta."
