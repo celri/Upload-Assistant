@@ -285,7 +285,10 @@ class QbittorrentClientMixin:
 
         # Return cached user decision if already asked this session
         if cache_key in _qbit_user_decision_cache:
-            return _qbit_user_decision_cache[cache_key]
+            cached = _qbit_user_decision_cache[cache_key]
+            if not cached:
+                meta["qbit_offline_abort"] = True
+            return cached
 
         target = Redaction.redact_private_info(proxy_url) if proxy_url else f"{client.get('qbit_url')}:{client.get('qbit_port')}"
         console.print(f"[bold red]qBittorrent appears to be offline or unreachable ({target}).")
