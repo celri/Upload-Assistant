@@ -3,7 +3,6 @@ import re
 from typing import Any
 
 from src.console import console
-from src.nfo_generator import SceneNfoGenerator
 from src.trackers.COMMON import COMMON
 from src.trackers.FRENCH import FrenchTrackerMixin
 from src.trackers.UNIT3D import UNIT3D
@@ -86,14 +85,6 @@ class G3MINI(FrenchTrackerMixin, UNIT3D):
         ):
             console.print(f"[bold red]Language requirements not met for {self.tracker}.[/bold red]")
             return False
-
-        # Always generate NFO for G3MINI
-        if not meta.get("nfo") and not meta.get("auto_nfo"):
-            generator = SceneNfoGenerator(self.config)
-            nfo_path = await generator.generate_nfo(meta, self.tracker)
-            if nfo_path:
-                meta["nfo"] = nfo_path
-                meta["auto_nfo"] = True
 
         return True
 
