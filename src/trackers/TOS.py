@@ -342,10 +342,7 @@ class TOS(FrenchTrackerMixin, UNIT3D):
             return False
 
         # Check if it's a Scene release without NFO - TOS requires NFO for Scene releases
-        is_scene = meta.get("scene", False)
-        has_nfo = meta.get("nfo", False) or meta.get("auto_nfo", False)
-
-        if is_scene and not has_nfo:
+        if meta.get("scene", False) and not meta.get("nfo") and not meta.get("auto_nfo"):
             console.print(f"[red]{self.tracker}: Scene release detected but no NFO file found. TOS requires NFO files for Scene releases.[/red]")
             return False
 
