@@ -1820,10 +1820,17 @@ class FrenchTrackerMixin:
         return lines
 
     def _get_nfo_files(self, meta: Meta) -> list[str]:
-        """Get NFO files in folder.
+        """Get NFO files in the release folder (including subdirectories).
 
-        Used for C411 to get and include NFO files in .torrent"""
-        nfo_files = glob.glob(os.path.join(str(meta.get("path", "")), "*.nfo"))
+        Used by French trackers to include NFO files in .torrent and API upload."""
+        path = str(meta.get("path", ""))
+        search_dir = path if os.path.isdir(path) else os.path.dirname(path)
+        if not search_dir:
+            return []
+        # Search top-level first, then subdirectories (season packs)
+        nfo_files = glob.glob(os.path.join(search_dir, "*.nfo"))
+        if not nfo_files:
+            nfo_files = glob.glob(os.path.join(search_dir, "**", "*.nfo"), recursive=True)
         if nfo_files:
             meta["keep_nfo"] = True
         return nfo_files
