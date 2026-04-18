@@ -295,6 +295,8 @@ class QbittorrentClientMixin:
             return False
         decision = await asyncio.to_thread(cli_ui.ask_yes_no, "Proceed anyway?", default=False)
         _qbit_user_decision_cache[cache_key] = decision
+        if not decision:
+            meta["qbit_offline_abort"] = True
         return decision
 
     async def _proxy_get_with_retry(

@@ -1285,6 +1285,9 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> None:
             reuse_torrent = None
             if meta.get("rehash", False) is False and not meta["base_torrent_created"] and not meta["we_checked_them_all"]:
                 reuse_torrent = await client.find_existing_torrent(meta)
+                if meta.get("qbit_offline_abort"):
+                    console.print("[bold red]Aborting: qBittorrent is offline and user chose not to proceed.")
+                    return
                 if reuse_torrent is not None:
                     reuse_success = await TorrentCreator.create_base_from_existing_torrent(reuse_torrent, meta["base_dir"], meta["uuid"], meta["path"])
                     if not reuse_success:
