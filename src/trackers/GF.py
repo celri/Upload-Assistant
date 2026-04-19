@@ -58,6 +58,8 @@ class GF(FrenchTrackerMixin, UNIT3D):
     10  Other
     """
 
+    notag_label: str = "NoTag"
+
     def __init__(self, config: dict[str, Any]):
         super().__init__(config, tracker_name="GF")
         self.config = config
@@ -348,6 +350,16 @@ class GF(FrenchTrackerMixin, UNIT3D):
 
     async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
         name = meta.get("uuid", "").replace(".mkv", "").replace(".mp4", "").replace(".avi", "")
+        # Handle notag: if tag is empty/invalid, use tracker's notag label
+        tag = meta.get("tag", "")
+        tag_group = tag.lstrip("-").strip() if tag else ""
+        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
+        if not tag_group or any(inv in tag_group.lower() for inv in invalid_tags):
+            label = getattr(self, "notag_label", "")
+            if label:
+                for inv in invalid_tags:
+                    name = re.sub(rf"-{re.escape(inv)}", "", name, flags=re.IGNORECASE)
+                name = f"{name}-{label}"
         return self._format_name(name)
 
     # ──────────────────────────────────────────────────────────

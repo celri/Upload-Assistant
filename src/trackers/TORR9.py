@@ -70,6 +70,7 @@ class TORR9(FrenchTrackerMixin):
         self.api_key: str = str(tracker_cfg.get("api_key", "")).strip()
         self._bearer_token: str | None = None  # cached JWT from login
         self.tmdb_manager = TmdbManager(config)
+        self.common = COMMON(config)
         self.banned_groups: list[str] = ["k0RE", "Dread-Team"]
 
     # TORR9 accepts both French and English titles in release names;
@@ -927,6 +928,10 @@ class TORR9(FrenchTrackerMixin):
         The original title is searched first; the other serves as complement.
         """
         dupes: list[dict[str, Any]] = []
+
+        if not await self.get_additional_checks(meta):
+            meta["skipping"] = self.tracker
+            return dupes
 
         token = await self._get_token()
         if not token:

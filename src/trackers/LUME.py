@@ -12,6 +12,8 @@ Meta = dict[str, Any]
 
 
 class LUME(UNIT3D):
+    skip_nfo: bool = True
+
     def __init__(self, config: dict[str, Any]) -> None:
         super().__init__(config, tracker_name="LUME")
         self.config = config
@@ -31,6 +33,9 @@ class LUME(UNIT3D):
         }
 
         return data
+
+    async def get_additional_files(self, meta: Meta) -> dict[str, tuple[str, bytes, str]]:
+        return {}
 
     async def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True

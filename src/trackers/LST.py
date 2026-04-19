@@ -25,6 +25,8 @@ class LST(UNIT3D):
         self.banned_groups = []
         pass
 
+    skip_nfo: bool = True
+
     async def get_additional_files(self, meta: Meta) -> dict[str, tuple[str, bytes, str]]:
         return {}
 

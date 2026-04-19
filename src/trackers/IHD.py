@@ -15,6 +15,8 @@ Config = dict[str, Any]
 
 
 class IHD(UNIT3D):
+    skip_nfo: bool = True
+
     def __init__(self, config: Config) -> None:
         super().__init__(config, tracker_name="IHD")
         self.config: Config = config
@@ -144,6 +146,9 @@ class IHD(UNIT3D):
             ihd_name = ihd_name.replace(resolution, f"{foreign_lang} {resolution}", 1)
 
         return {"name": ihd_name}
+
+    async def get_additional_files(self, meta: Meta) -> dict[str, tuple[str, bytes, str]]:
+        return {}
 
     async def get_additional_checks(self, meta: Meta) -> bool:
         should_continue = True

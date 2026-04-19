@@ -1452,14 +1452,8 @@ other_api_trackers = {"ANT", "BHDTV", "C411", "DC", "GPW", "NBL", "NXM", "RTF", 
 http_trackers = {"AR", "ASC", "AZ", "BJS", "BT", "CZ", "FF", "FL", "HDB", "HDF", "HDS", "HDT", "IS", "MTV", "PHD", "PTER", "PTS", "TTG"}
 
 # ── Inherent tracker behaviors (not user-configurable) ──
-# Trackers that exclude .nfo files from torrents and API uploads
-nfo_skip_trackers = frozenset({"DP", "FNP", "HHD", "LST", "LUME", "STC", "ULCX"})
+# Trackers that exclude .nfo files from torrents and API uploads (derived from skip_nfo class attr)
+nfo_skip_trackers = frozenset(name for name, cls in tracker_class_map.items() if getattr(cls, "skip_nfo", False))
 
-# Trackers that accept releases without a group tag, mapped to their replacement label
-notag_labels: dict[str, str] = {"C411": "NOTAG", "FNP": "NOGROUP", "G3MINI": "NoGrP", "GF": "NoTag", "NXM": "NoGrp"}
-
-# Trackers that skip the English audio/subtitle requirement check
-english_check_skip_trackers = frozenset({"C411", "G3MINI", "GF", "HDF", "NST", "NXM", "TOS", "TORR9"})
-
-# Trackers that require French audio or subtitles (warn if neither is detected)
-french_check_trackers = frozenset({"C411", "G3MINI", "GF", "HDF", "NST", "TOS", "TORR9", "NXM"})
+# Trackers that accept releases without a group tag, mapped to their replacement label (derived from notag_label class attr)
+notag_labels: dict[str, str] = {name: cls.notag_label for name, cls in tracker_class_map.items() if getattr(cls, "notag_label", "")}

@@ -718,17 +718,10 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> Optional[b
                     else:
                         meta["tracker_status"][tracker]["skip_upload"] = False
 
-        # General English language check - warns if no English audio or subtitle found
+        # General language check - ensure info is available for tracker-level checks
         if not audio_prompted:
             # Ensure language info is available even if no tracker triggered language processing
             await languages_manager.process_desc_language(meta, tracker="")
-        if not await languages_manager.check_english_language_requirement(meta, config):
-            console.print("[red]Upload cancelled due to missing English language content.[/red]")
-            meta["we_are_uploading"] = False
-            return
-
-        # French language check — warns if uploading to French trackers without French content
-        await languages_manager.check_french_language_requirement(meta, config)
 
         # Auto-add trackers based on detected audio/subtitle languages
         # Skip when trackers were explicitly set via -tk / --trackers

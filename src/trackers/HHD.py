@@ -74,6 +74,8 @@ class HHD(UNIT3D):
         ]
         pass
 
+    skip_nfo: bool = True
+
     async def get_additional_files(self, meta: Meta) -> dict[str, tuple[str, bytes, str]]:
         return {}
 
@@ -81,6 +83,11 @@ class HHD(UNIT3D):
         should_continue = True
         if meta["type"] == "DVDRIP":
             console.print("[bold red]DVDRIP uploads are not allowed on HHD.[/bold red]")
+            return False
+
+        if meta["is_disc"] not in ["BDMV", "DVD"] and not await self.common.check_language_requirements(
+            meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True, original_language=True
+        ):
             return False
 
         return should_continue

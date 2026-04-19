@@ -75,6 +75,8 @@ def _meta_base(**overrides: Any) -> dict[str, Any]:
         'imdb_id': 1234567,
         'original_language': 'fr',
         'image_list': [],
+        'audio_languages': ['French'],
+        'subtitle_languages': [],
         'bdinfo': None,
         'mediainfo': {
             'media': {

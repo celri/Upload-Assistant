@@ -37,6 +37,8 @@ Config = dict[str, Any]
 class C411(FrenchTrackerMixin):
     """c411.org tracker — French private tracker with custom API."""
 
+    notag_label: str = "NOTAG"
+
     # Overloading TORRENT_EXTENSIONS to add .nfo
     _TORRENT_EXTENSIONS: frozenset[str] = frozenset((".mkv", ".mp4", ".ts", ".m2ts", ".vob", ".avi", ".nfo"))
 
@@ -1648,6 +1650,10 @@ class C411(FrenchTrackerMixin):
         Response format:  RSS/XML with <item> elements.
         """
         dupes: list[dict[str, Any]] = []
+
+        if not await self.get_additional_checks(meta):
+            meta["skipping"] = self.tracker
+            return dupes
 
         if not self.api_key:
             console.print("[yellow]C411: No API key configured, skipping dupe check.[/yellow]")

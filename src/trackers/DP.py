@@ -11,6 +11,8 @@ from src.trackers.UNIT3D import UNIT3D
 
 
 class DP(UNIT3D):
+    skip_nfo: bool = True
+
     def __init__(self, config: dict[str, Any]):
         super().__init__(config, tracker_name="DP")
         self.config = config
@@ -87,6 +89,9 @@ class DP(UNIT3D):
             "YTS",
         ]
         pass
+
+    async def get_additional_files(self, meta: dict[str, Any]) -> dict[str, tuple[str, bytes, str]]:
+        return {}
 
     async def get_additional_checks(self, meta: dict[str, Any]) -> bool:
         should_continue = True

@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import re
 from typing import Any, Optional
 
 from src.trackers.COMMON import COMMON
@@ -6,6 +7,9 @@ from src.trackers.UNIT3D import UNIT3D
 
 
 class FNP(UNIT3D):
+    skip_nfo: bool = True
+    notag_label: str = "NOGROUP"
+
     def __init__(self, config: dict[str, Any]) -> None:
         super().__init__(config, tracker_name="FNP")
         self.config = config
@@ -45,3 +49,17 @@ class FNP(UNIT3D):
         }
 
         return data
+
+    async def get_additional_files(self, meta: dict[str, Any]) -> dict[str, tuple[str, bytes, str]]:
+        return {}
+
+    async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
+        name = str(meta.get("name", ""))
+        tag = str(meta.get("tag", ""))
+        tag_group = tag.lstrip("-").strip() if tag else ""
+        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
+        if not tag_group or any(inv in tag_group.lower() for inv in invalid_tags):
+            for inv in invalid_tags:
+                name = re.sub(rf"-{re.escape(inv)}", "", name, flags=re.IGNORECASE)
+            name = f"{name}-{self.notag_label}"
+        return {"name": name}
