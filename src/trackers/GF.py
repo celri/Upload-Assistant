@@ -357,8 +357,10 @@ class GF(FrenchTrackerMixin, UNIT3D):
         if not tag_group or any(inv == tag_group for inv in invalid_tags):
             label = getattr(self, "notag_label", "")
             if label:
-                for inv in invalid_tags:
-                    name = re.sub(rf"-?{re.escape(inv)}-?", "", name, flags=re.IGNORECASE)
+                if tag_group:
+                    # Strip the invalid token as a trailing suffix only
+                    _inv_pattern = "|".join(re.escape(inv) for inv in invalid_tags)
+                    name = re.sub(rf"-(?:{_inv_pattern})$", "", name, flags=re.IGNORECASE)
                 name = f"{name}-{label}"
         return self._format_name(name)
 

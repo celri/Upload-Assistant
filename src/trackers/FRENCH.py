@@ -1078,9 +1078,6 @@ class FrenchTrackerMixin:
         if not tag_group or any(inv == tag_group for inv in invalid_tags):
             label = getattr(self, "notag_label", "")
             if label:
-                # Strip any existing invalid tag from the name
-                for inv in invalid_tags:
-                    name = re.sub(rf"-?{re.escape(inv)}-?", "", name, flags=re.IGNORECASE)
                 tag = f"-{label}"
 
         name = name + tag  # tag starts with '-', no space needed
