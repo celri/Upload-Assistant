@@ -37,6 +37,8 @@ Config = dict[str, Any]
 class NXM(FrenchTrackerMixin):
     """nexum-core.com tracker — French private tracker with custom API."""
 
+    notag_label: str = "NoGrp"
+
     # Overloading TORRENT_EXTENSIONS to add .nfo
     _TORRENT_EXTENSIONS: frozenset[str] = frozenset((".mkv", ".mp4", ".ts", ".m2ts", ".vob", ".avi", ".nfo"))
 
@@ -504,6 +506,10 @@ class NXM(FrenchTrackerMixin):
         Response format:  JSON.
         """
         dupes: list[dict[str, Any]] = []
+
+        if not await self.get_additional_checks(meta):
+            meta["skipping"] = self.tracker
+            return dupes
 
         title = meta.get("title", "")
         # Ensure French title is resolved (may not be populated yet at dupe-check time)

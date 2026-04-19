@@ -9,6 +9,8 @@ from src.trackers.UNIT3D import UNIT3D
 
 
 class G3MINI(FrenchTrackerMixin, UNIT3D):
+    notag_label: str = "NoGrP"
+
     def __init__(self, config):
         super().__init__(config, tracker_name="G3MINI")
         self.config = config
@@ -221,6 +223,15 @@ class G3MINI(FrenchTrackerMixin, UNIT3D):
 
             exit()
         name_notag = name
+        # Handle notag: if tag is empty/invalid, use tracker's notag label
+        tag_group = tag.strip("-").strip().lower() if tag else ""
+        invalid_tags = ["nogrp", "nogroup", "unknown", "unk"]
+        if not tag_group or any(inv == tag_group for inv in invalid_tags):
+            label = getattr(self, "notag_label", "")
+            if label:
+                for inv in invalid_tags:
+                    name_notag = re.sub(rf"-?{re.escape(inv)}-?", "", name_notag, flags=re.IGNORECASE)
+                tag = f"-{label}"
         name = name_notag + tag
         clean_name = _clean_filename(name)
         dot_name = replace_spaces_with_dots(clean_name)

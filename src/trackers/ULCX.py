@@ -72,6 +72,8 @@ class ULCX(UNIT3D):
         ]
         pass
 
+    skip_nfo: bool = True
+
     async def get_additional_files(self, meta: Meta) -> dict[str, tuple[str, bytes, str]]:
         return {}
 

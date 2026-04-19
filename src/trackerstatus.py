@@ -127,11 +127,7 @@ class TrackerStatusManager:
                             global_accept = self.config.get("DEFAULT", {}).get("accept_notag", False)
                             if tracker_name not in notag_labels and not global_accept:
                                 local_tracker_status["skipped"] = True
-                            else:
-                                # Apply notag_label if tracker defines one
-                                label = notag_labels.get(tracker_name, "")
-                                if label:
-                                    local_meta["tag"] = f"-{label}"
+                            # Tag replacement is handled by each tracker's get_name()
                         else:
                             # detag: always skip
                             local_tracker_status["skipped"] = True

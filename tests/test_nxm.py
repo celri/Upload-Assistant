@@ -56,6 +56,8 @@ def _meta_base(**overrides: Any) -> dict[str, Any]:
         "imdb_id": 1234567,
         "tmdb": 42,
         "debug": False,
+        "audio_languages": ["French"],
+        "subtitle_languages": [],
         "mediainfo": {},
     }
     m.update(overrides)
@@ -147,4 +149,3 @@ class TestTrackerIdentity:
 
     def test_include_service_in_name(self):
         assert NXM.INCLUDE_SERVICE_IN_NAME is True
-
