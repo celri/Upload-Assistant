@@ -224,13 +224,13 @@ class G3MINI(FrenchTrackerMixin, UNIT3D):
             exit()
         name_notag = name
         # Handle notag: if tag is empty/invalid, use tracker's notag label
-        tag_group = tag.lstrip("-").strip() if tag else ""
-        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
-        if not tag_group or any(inv in tag_group.lower() for inv in invalid_tags):
+        tag_group = tag.strip("-").strip().lower() if tag else ""
+        invalid_tags = ["nogrp", "nogroup", "unknown", "unk"]
+        if not tag_group or any(inv == tag_group for inv in invalid_tags):
             label = getattr(self, "notag_label", "")
             if label:
                 for inv in invalid_tags:
-                    name_notag = re.sub(rf"-{re.escape(inv)}", "", name_notag, flags=re.IGNORECASE)
+                    name_notag = re.sub(rf"-?{re.escape(inv)}-?", "", name_notag, flags=re.IGNORECASE)
                 tag = f"-{label}"
         name = name_notag + tag
         clean_name = _clean_filename(name)

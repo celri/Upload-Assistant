@@ -408,7 +408,7 @@ class FrenchTrackerMixin:
 
         Subclasses may override to add extra rules (banned types, etc.).
         """
-        french_languages = ["french", "fre", "fra", "fr", "français", "francais", "fr-fr", "fr-ca"]
+        french_languages = list(FRENCH_LANG_VALUES)
         if not await self.common.check_language_requirements(
             meta,
             self.tracker,
@@ -1073,14 +1073,14 @@ class FrenchTrackerMixin:
         name = " ".join(name.split())  # collapse whitespace
 
         # Handle notag: if tag is empty/invalid and tracker accepts notag, use the label
-        tag_group = tag.lstrip("-").strip() if tag else ""
-        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
-        if not tag_group or any(inv in tag_group.lower() for inv in invalid_tags):
+        tag_group = tag.strip("-").strip().lower() if tag else ""
+        invalid_tags = ["nogrp", "nogroup", "unknown", "unk"]
+        if not tag_group or any(inv == tag_group for inv in invalid_tags):
             label = getattr(self, "notag_label", "")
             if label:
                 # Strip any existing invalid tag from the name
                 for inv in invalid_tags:
-                    name = re.sub(rf"-{re.escape(inv)}", "", name, flags=re.IGNORECASE)
+                    name = re.sub(rf"-?{re.escape(inv)}-?", "", name, flags=re.IGNORECASE)
                 tag = f"-{label}"
 
         name = name + tag  # tag starts with '-', no space needed

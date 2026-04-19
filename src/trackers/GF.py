@@ -352,13 +352,13 @@ class GF(FrenchTrackerMixin, UNIT3D):
         name = meta.get("uuid", "").replace(".mkv", "").replace(".mp4", "").replace(".avi", "")
         # Handle notag: if tag is empty/invalid, use tracker's notag label
         tag = meta.get("tag", "")
-        tag_group = tag.lstrip("-").strip() if tag else ""
-        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
-        if not tag_group or any(inv in tag_group.lower() for inv in invalid_tags):
+        tag_group = tag.strip("-").strip().lower() if tag else ""
+        invalid_tags = ["nogrp", "nogroup", "unknown", "unk"]
+        if not tag_group or any(inv == tag_group for inv in invalid_tags):
             label = getattr(self, "notag_label", "")
             if label:
                 for inv in invalid_tags:
-                    name = re.sub(rf"-{re.escape(inv)}", "", name, flags=re.IGNORECASE)
+                    name = re.sub(rf"-?{re.escape(inv)}-?", "", name, flags=re.IGNORECASE)
                 name = f"{name}-{label}"
         return self._format_name(name)
 

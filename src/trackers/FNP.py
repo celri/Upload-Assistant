@@ -56,10 +56,10 @@ class FNP(UNIT3D):
     async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
         name = str(meta.get("name", ""))
         tag = str(meta.get("tag", ""))
-        tag_group = tag.lstrip("-").strip() if tag else ""
-        invalid_tags = ["nogrp", "nogroup", "unknown", "-unk-"]
-        if not tag_group or any(inv in tag_group.lower() for inv in invalid_tags):
+        tag_group = tag.strip("-").strip().lower() if tag else ""
+        invalid_tags = ["nogrp", "nogroup", "unknown", "unk"]
+        if not tag_group or any(inv == tag_group for inv in invalid_tags):
             for inv in invalid_tags:
-                name = re.sub(rf"-{re.escape(inv)}", "", name, flags=re.IGNORECASE)
+                name = re.sub(rf"-?{re.escape(inv)}-?", "", name, flags=re.IGNORECASE)
             name = f"{name}-{self.notag_label}"
         return {"name": name}

@@ -70,7 +70,7 @@ class STC(UNIT3D):
             else:
                 return False
 
-        if meta["is_disc"] not in ["BDMV", "DVD"] and not await self.common.check_language_requirements(
+        if meta.get("is_disc") not in ["BDMV", "DVD"] and not await self.common.check_language_requirements(
             meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True, original_language=True
         ):
             return False

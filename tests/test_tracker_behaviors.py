@@ -86,7 +86,7 @@ class TestGetAdditionalFilesSkipNfo:
             "debug": False,
         }
 
-    @pytest.mark.parametrize("tracker_name", ["DP", "FNP", "HHD", "IHD", "LUME", "STC"])
+    @pytest.mark.parametrize("tracker_name", ["DP", "FNP", "HHD", "IHD", "LST", "LUME", "STC", "ULCX"])
     def test_get_additional_files_returns_empty(self, tracker_name, meta):
         """skip_nfo trackers that override get_additional_files must return {}."""
         from src.trackersetup import tracker_class_map
@@ -145,7 +145,8 @@ class TestNotagLabelsDynamicDict:
         for cls in (NoAttr, EmptyStr):
             assert not getattr(cls, "notag_label", ""), f"{cls.__name__} should be empty/falsy"
         # None and False are truthy in getattr but falsy in bool — our filter uses `if` so they're excluded
-        assert not getattr(NoneVal, "notag_label", "")  is None or True  # attr exists, returns None
+        assert getattr(NoneVal, "notag_label", "") is None  # attr exists, returns None
+        assert getattr(FalseVal, "notag_label", "") is False  # attr exists, returns False
         assert getattr(ValidLabel, "notag_label", "") == "TEST"
 
 
