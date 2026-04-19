@@ -1402,6 +1402,8 @@ tracker_class_map: dict[str, type[Any]] = {
     "YUS": YUS,
 }
 
+# Trackers running the UNIT3D platform.
+# Upload flow: JSON API with mod-queue / draft support; descriptions built via unit3d_edit_desc().
 api_trackers = {
     "A4K",
     "ACM",
@@ -1447,8 +1449,14 @@ api_trackers = {
     "YUS",
 }
 
+# Trackers with a custom (non-UNIT3D) JSON/REST API.
+# Upload flow: same tracker_class.upload() entry point as api_trackers, but no mod-queue/draft handling;
+# descriptions built via tracker_class.edit_desc(). Some entries have tracker-specific quirks (e.g. SN rate-limit delay).
 other_api_trackers = {"ANT", "BHDTV", "C411", "DC", "GPW", "NBL", "NXM", "RTF", "SN", "SPD", "TL", "TORR9", "TVC"}
 
+# Trackers without a public API: upload is performed via HTTP form/scraping.
+# Upload flow: tracker_class.upload() handles web requests directly; no API key negotiation.
+# Also used to filter valid trackers in HTTP-only batch mode (upload.py).
 http_trackers = {"AR", "ASC", "AZ", "BJS", "BT", "CZ", "FF", "FL", "HDB", "HDF", "HDS", "HDT", "IS", "MTV", "PHD", "PTER", "PTS", "TTG"}
 
 # ── Inherent tracker behaviors (not user-configurable) ──
