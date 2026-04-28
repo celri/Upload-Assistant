@@ -120,7 +120,8 @@ class BLU(UNIT3D):
             allowed = ["mkv"]
             if type_name == "HDTV":
                 allowed.append("ts")
-            if type_name in ["WEBDL", "HDTV"] and "DV" in meta.get("hdr", "") and "HDR" not in meta.get("hdr", ""):
+            hdr = meta.get("hdr") or ""
+            if type_name in ["WEBDL", "HDTV"] and "DV" in hdr and "HDR" not in hdr:
                 allowed.append("mp4")
 
             if container not in allowed:
