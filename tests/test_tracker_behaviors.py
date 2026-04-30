@@ -109,7 +109,7 @@ class TestNotagLabelsDynamicDict:
 
     def test_known_notag_members(self):
         from src.trackersetup import notag_labels
-        expected = {"C411": "NOTAG", "FNP": "NOGROUP", "G3MINI": "NoGrP", "GF": "NoTag", "NXM": "NoGrp"}
+        expected = {"C411": "NOTAG", "FNP": "NOGROUP", "G3MINI": "NoGrP", "GF": "NoTag", "NST": "NoTag", "NXM": "NoGrp", "TORR9": "NoTag", "TOS": "NOTAG"}
         assert notag_labels == expected
 
     def test_empty_string_excluded(self):
