@@ -60,6 +60,9 @@ class NST(FrenchTrackerMixin, UNIT3D):
 
     UHD_ONLY_FOR_REMUX_DISC: bool = True
 
+    # NST accepts NOTAG
+    notag_label: str = "NoTag"
+
     # ── Category helpers ──────────────────────────────────────────────
 
     def _resolve_category_slug(self, meta: dict[str, Any], cat: str = "") -> str:

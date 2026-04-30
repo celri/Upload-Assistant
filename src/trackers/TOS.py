@@ -35,6 +35,9 @@ class TOS(FrenchTrackerMixin, UNIT3D):
         ]
         pass
 
+    # TOS accepts NOTAG
+    notag_label: str = "NOTAG"
+
     async def get_category_id(
         self,
         meta: dict[str, Any],
@@ -214,7 +217,7 @@ class TOS(FrenchTrackerMixin, UNIT3D):
         part = meta.get("part", "")
         repack = meta.get("repack", "")
         three_d = meta.get("3D", "")
-        tag = meta.get("tag", "")
+        tag = meta.get("tag") or "-" + self.notag_label
         source = meta.get("source", "")
         uhd = meta.get("uhd", "")
         hdr = meta.get("hdr", "")

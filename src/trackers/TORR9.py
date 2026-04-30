@@ -77,6 +77,9 @@ class TORR9(FrenchTrackerMixin):
     # the original title is preferred.
     PREFER_ORIGINAL_TITLE: bool = True
 
+    # TORR9 accepts NOTAG
+    notag_label: str = "NoTag"
+
     # ──────────────────────────────────────────────────────────
     #  Authentication — login to obtain Bearer JWT
     # ──────────────────────────────────────────────────────────
