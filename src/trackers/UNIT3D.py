@@ -484,7 +484,30 @@ class UNIT3D:
                         torrent_id = await self.get_torrent_id(response_data)
 
                         meta["tracker_status"][self.tracker]["torrent_id"] = torrent_id
+
+                        # Preserve NFO-patched torrent before download (tracker may serve version without NFO)
+                        nfo_torrent_backup = None
+                        if meta.get("keep_nfo"):
+                            nfo_path = f"{base}/[{self.tracker}].torrent"
+                            if os.path.exists(nfo_path):
+                                async with aiofiles.open(nfo_path, "rb") as f_nfo:
+                                    nfo_torrent_backup = await f_nfo.read()
+
                         await self.common.download_tracker_torrent(meta, self.tracker, headers=headers, downurl=response_data["data"])
+
+                        # Restore NFO-patched torrent if tracker-downloaded version stripped the NFO
+                        if nfo_torrent_backup:
+                            from torf import Torrent  # noqa: PLC0415
+
+                            downloaded_path = f"{base}/[{self.tracker}].torrent"
+                            try:
+                                downloaded = Torrent.read(downloaded_path)
+                                if not any(str(f).lower().endswith(".nfo") for f in downloaded.files):
+                                    async with aiofiles.open(downloaded_path, "wb") as f_restore:
+                                        await f_restore.write(nfo_torrent_backup)
+                            except Exception:
+                                pass  # Keep downloaded version if check fails
+
                         return True  # Success
 
                 except httpx.HTTPStatusError as e:  # noqa: PERF203
