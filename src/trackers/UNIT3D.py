@@ -500,13 +500,19 @@ class UNIT3D:
                             from torf import Torrent  # noqa: PLC0415
 
                             downloaded_path = f"{base}/[{self.tracker}].torrent"
+                            needs_restore = False
                             try:
                                 downloaded = Torrent.read(downloaded_path)
-                                if not any(str(f).lower().endswith(".nfo") for f in downloaded.files):
+                                needs_restore = not any(str(f).lower().endswith(".nfo") for f in downloaded.files)
+                            except Exception:
+                                pass  # Cannot parse downloaded torrent; keep as-is
+                            if needs_restore:
+                                try:
                                     async with aiofiles.open(downloaded_path, "wb") as f_restore:
                                         await f_restore.write(nfo_torrent_backup)
-                            except Exception:
-                                pass  # Keep downloaded version if check fails
+                                    console.print(f"[cyan]{self.tracker}: Tracker torrent lacked NFO — restored NFO-patched version.[/cyan]")
+                                except Exception as write_err:
+                                    console.print(f"[yellow]{self.tracker}: Failed to restore NFO-patched torrent: {write_err}[/yellow]")
 
                         return True  # Success
 
