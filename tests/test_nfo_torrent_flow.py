@@ -341,6 +341,62 @@ class TestStripNfoFromTorrent:
         ok = _run(TorrentCreator.strip_nfo_from_torrent(str(src_path), str(out_path), "/tmp"))
         assert ok is False
 
+    def test_strip_returns_false_for_single_file_torrent(self, tmp_path):
+        """Single-file torrent (info.length present, no info.files) → strip returns False.
+
+        _strip_nfo_sync only handles multi-file torrents; a single-file torrent
+        has no NFO entry to strip so False is the safe/correct answer.
+        """
+        from src.torrentcreate import TorrentCreator
+
+        release = tmp_path / "Movie.2024.1080p"
+        release.mkdir()
+        mkv_data = b"FAKE_MKV_CONTENT"
+        (release / "Movie.2024.1080p.mkv").write_bytes(mkv_data)
+
+        piece_length = 256 * 1024
+        pieces = _sha1(mkv_data)
+        info: dict = {
+            "name": "Movie.2024.1080p.mkv",
+            "piece length": piece_length,
+            "pieces": pieces,
+            "length": len(mkv_data),  # single-file: length, not files
+        }
+        torrent_bytes = _bencode({"info": info})
+
+        src_path = tmp_path / "BASE.torrent"
+        out_path = tmp_path / "BASE_NONFO.torrent"
+        src_path.write_bytes(torrent_bytes)
+
+        ok = _run(TorrentCreator.strip_nfo_from_torrent(str(src_path), str(out_path), str(release)))
+        assert ok is False, "Single-file torrent must return False"
+        assert not out_path.exists(), "No output file must be written for single-file torrent"
+
+    def test_strip_returns_false_for_nfo_only_torrent(self, tmp_path):
+        """Torrent whose only file is the .nfo → strip returns False.
+
+        After removing all NFO entries there would be nothing left; _strip_nfo_sync
+        must detect this (no non-NFO files) and return False rather than creating
+        an empty torrent.
+        """
+        from src.torrentcreate import TorrentCreator
+
+        release = tmp_path / "Release.2024"
+        release.mkdir()
+        nfo_data = b"[NFO content]"
+        (release / "release.nfo").write_bytes(nfo_data)
+
+        name = release.name
+        src_bytes = _make_torrent_bytes(name, [("release.nfo", nfo_data)])
+
+        src_path = tmp_path / "BASE.torrent"
+        out_path = tmp_path / "BASE_NONFO.torrent"
+        src_path.write_bytes(src_bytes)
+
+        ok = _run(TorrentCreator.strip_nfo_from_torrent(str(src_path), str(out_path), str(release)))
+        assert ok is False, "NFO-only torrent must return False (nothing left after strip)"
+        assert not out_path.exists(), "No output file must be written for NFO-only torrent"
+
 
 # ═══════════════════════════════════════════════════════════════
 #  3. Step 1 — proactive keep_nfo in upload.py
@@ -795,9 +851,9 @@ class TestRecreateTorrentIfNfoNoExtraHash:
                 meta, tracker_obj.common, tracker_obj.config, tracker, source_flag
             ))
 
-        # BASE has no NFO → no existing-torrent-with-NFO shortcut → full hash
-        assert full_hash_calls, \
-            "TorrentCreator.create_torrent must be called when BASE has no NFO"
+        # BASE has no NFO → no existing-torrent-with-NFO shortcut → exactly 1 full hash
+        assert len(full_hash_calls) == 1, \
+            f"Expected exactly 1 create_torrent call when BASE has no NFO; got {full_hash_calls}"
         assert not (full_hash_calls and tracker in clone_calls), \
             "When a full rehash runs, create_torrent_for_upload (clone) must NOT also run"
 
