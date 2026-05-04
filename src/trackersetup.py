@@ -1463,5 +1463,9 @@ http_trackers = {"AR", "ASC", "AZ", "BJS", "BT", "CZ", "FF", "FL", "HDB", "HDF",
 # Trackers that exclude .nfo files from torrents and API uploads (derived from skip_nfo class attr)
 nfo_skip_trackers = frozenset(name for name, cls in tracker_class_map.items() if getattr(cls, "skip_nfo", False))
 
+# Trackers that auto-detect NFO files from disk and embed them in the torrent
+# (derived from auto_nfo class attr set on FrenchTrackerMixin).
+nfo_auto_trackers = frozenset(name for name, cls in tracker_class_map.items() if getattr(cls, "auto_nfo", False))
+
 # Trackers that accept releases without a group tag, mapped to their replacement label (derived from notag_label class attr)
 notag_labels: dict[str, str] = {name: cls.notag_label for name, cls in tracker_class_map.items() if getattr(cls, "notag_label", "")}

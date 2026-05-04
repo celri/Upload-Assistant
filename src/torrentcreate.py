@@ -476,6 +476,148 @@ class TorrentCreator:
         cli_ui.info_progress(f"Hashing... {speed_str} | ETA: {eta}", int(percentage_done), 100)
 
     @staticmethod
+    async def strip_nfo_from_torrent(
+        source_torrent_path: str,
+        output_torrent_path: str,
+        content_path: str,
+    ) -> bool:
+        """Derive a NFO-free torrent from an existing torrent that includes NFO files.
+
+        For each piece that is purely non-NFO content the existing SHA-1 hash is kept
+        unchanged.  Only the single piece that straddles the video/NFO boundary (if any)
+        requires reading a handful of bytes from disk — far less I/O than a full rehash.
+
+        The operation is only safe when ALL NFO entries appear AFTER all other entries in
+        the file list (the ordering produced by both mkbrr and torf for typical releases).
+        Returns False — without modifying anything — if the strip cannot be done safely,
+        so the caller can fall back to a full rehash.
+        """
+        try:
+            return await asyncio.to_thread(
+                TorrentCreator._strip_nfo_sync,
+                source_torrent_path,
+                output_torrent_path,
+                content_path,
+            )
+        except Exception as e:
+            console.print(f"[yellow]strip_nfo_from_torrent failed: {e}[/yellow]")
+            return False
+
+    @staticmethod
+    def _strip_nfo_sync(
+        source_torrent_path: str,
+        output_torrent_path: str,
+        content_path: str,
+    ) -> bool:
+        """Synchronous core of strip_nfo_from_torrent (runs in a thread)."""
+        import hashlib
+
+        try:
+            src = Torrent.read(source_torrent_path)
+            info = src.metainfo["info"]
+            piece_size: int = info["piece length"]
+            old_pieces_raw: bytes = info["pieces"]
+            old_files: list[dict[str, Any]] = info["files"]
+        except (KeyError, Exception):
+            # Missing "files" key means a single-file torrent — cannot strip in-place
+            return False
+
+        if not old_files:
+            return False
+
+        # Locate NFO entries and verify they are all at the tail of the file list.
+        # Any non-NFO file that follows an NFO entry would make a safe strip impossible
+        # without recomputing all affected pieces (fall back to full rehash instead).
+        first_nfo_idx: Optional[int] = None
+        for idx, f_info in enumerate(old_files):
+            path_parts = f_info.get("path", [])
+            is_nfo = any(str(p).lower().endswith(".nfo") for p in path_parts)
+            if is_nfo:
+                if first_nfo_idx is None:
+                    first_nfo_idx = idx
+            elif first_nfo_idx is not None:
+                # Non-NFO file comes after an NFO — mixed ordering, unsafe to strip
+                return False
+
+        if first_nfo_idx is None:
+            # No NFO present — nothing to strip; write a clean copy
+            Torrent.copy(src).write(output_torrent_path, overwrite=True)
+            return True
+
+        non_nfo_files: list[dict[str, Any]] = old_files[:first_nfo_idx]
+        nfo_files_in_torrent: list[dict[str, Any]] = old_files[first_nfo_idx:]
+
+        if not non_nfo_files:
+            # Torrent contains ONLY NFO files — nothing useful to keep
+            return False
+
+        # Byte offset at which NFO data begins in the concatenated content stream
+        nfo_start_offset: int = sum(f["length"] for f in non_nfo_files)
+
+        boundary_piece_idx: int = nfo_start_offset // piece_size
+        # How many bytes of non-NFO data live in the boundary piece (0 = exact boundary)
+        boundary_offset: int = nfo_start_offset % piece_size
+
+        if boundary_offset == 0:
+            # NFO starts on a piece boundary: every piece up to boundary_piece_idx is
+            # purely non-NFO content, so all existing hashes can be kept as-is.
+            final_pieces = old_pieces_raw[: boundary_piece_idx * 20]
+        else:
+            # The boundary piece mixes non-NFO tail bytes with NFO prefix bytes.
+            # We must recompute its hash using only the non-NFO portion (boundary_offset bytes).
+            piece_start = boundary_piece_idx * piece_size
+            boundary_data = b""
+            offset = 0
+
+            for f_info in non_nfo_files:
+                f_length: int = f_info["length"]
+                f_name = os.path.join(content_path, *f_info["path"])
+                file_end = offset + f_length
+
+                if file_end <= piece_start:
+                    offset = file_end
+                    continue
+
+                try:
+                    if os.path.getsize(f_name) != f_length:
+                        return False
+                except OSError:
+                    return False
+
+                read_from = max(0, piece_start - offset)
+                try:
+                    with open(f_name, "rb") as fh:  # noqa: ASYNC230
+                        fh.seek(read_from)
+                        boundary_data += fh.read(f_length - read_from)
+                except Exception:
+                    return False
+
+                offset = file_end
+
+            if not boundary_data:
+                return False
+
+            # Truncate to exactly the non-NFO bytes within this piece
+            boundary_data = boundary_data[:boundary_offset]
+            boundary_hash = hashlib.sha1(boundary_data, usedforsecurity=False).digest()  # nosec B324
+
+            unchanged_prefix = old_pieces_raw[: boundary_piece_idx * 20]
+            final_pieces = unchanged_prefix + boundary_hash
+
+        # Write the stripped torrent
+        patched = Torrent.copy(src)
+        patched.metainfo["info"]["files"] = list(non_nfo_files)
+        patched.metainfo["info"]["pieces"] = final_pieces
+        try:
+            patched.write(output_torrent_path, overwrite=True)
+        except Exception:
+            return False
+
+        nfo_total_kb = sum(f["length"] for f in nfo_files_in_torrent) / 1024
+        console.print(f"[green]NFO stripped from torrent ({nfo_total_kb:.1f} KB removed) — boundary piece recomputed from disk, no full rehash needed[/green]")
+        return True
+
+    @staticmethod
     def create_random_torrents(base_dir: str, uuid: str, num: Union[int, str], path: str) -> None:
         manual_name = re.sub(r"[^0-9a-zA-Z\[\]\'\-]+", ".", os.path.basename(path))
         base_torrent = Torrent.read(f"{base_dir}/tmp/{uuid}/BASE.torrent")
@@ -620,6 +762,10 @@ def create_random_torrents(base_dir: str, uuid: str, num: Union[int, str], path:
 
 async def create_base_from_existing_torrent(torrentpath: str, base_dir: str, uuid: str, content_path: Optional[str] = None) -> bool:
     return await TorrentCreator.create_base_from_existing_torrent(torrentpath, base_dir, uuid, content_path)
+
+
+async def strip_nfo_from_torrent(source_torrent_path: str, output_torrent_path: str, content_path: str) -> bool:
+    return await TorrentCreator.strip_nfo_from_torrent(source_torrent_path, output_torrent_path, content_path)
 
 
 def get_mkbrr_path(meta: Mapping[str, Any]) -> str:
