@@ -1329,11 +1329,11 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> Optional[b
         # piece — no full rehash.  Falls back to a full rehash if stripping fails
         # (e.g. single-file torrent, non-tail NFO ordering, or I/O error).
         meta.pop("base_nonfo_path", None)
+        nonfo_path = os.path.join(os.path.dirname(torrent_path), "BASE_NONFO.torrent")
         if os.path.exists(torrent_path) and meta.get("skip_nfo", False):
             try:
                 base_t = await asyncio.to_thread(Torrent.read, torrent_path)
                 if any(str(f).lower().endswith(".nfo") for f in base_t.files):
-                    nonfo_path = os.path.join(os.path.dirname(torrent_path), "BASE_NONFO.torrent")
                     if not os.path.exists(nonfo_path) and not meta.get("nohash", False):
                         stripped = await TorrentCreator.strip_nfo_from_torrent(torrent_path, nonfo_path, meta["path"])
                         if not stripped:

@@ -584,7 +584,12 @@ class TestBaseNonfoStrip:
         content_path: str,
         skip_nfo: bool = True,
     ) -> None:
-        """Reproduce the BASE_NONFO creation block from upload.py verbatim."""
+        """Reproduce the BASE_NONFO creation block from upload.py.
+
+        NOTE: nonfo_path is defined BEFORE the try block (matching upload.py)
+        so that tests catch any NameError regression if the definition drifts
+        back inside the try.
+        """
         import asyncio
         from torf import Torrent
         from src.torrentcreate import TorrentCreator
