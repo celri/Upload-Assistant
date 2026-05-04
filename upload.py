@@ -427,6 +427,27 @@ async def validate_tracker_logins(meta: Meta, trackers: Optional[list[str]] = No
         await asyncio.gather(*[validate_single_tracker(tracker) for tracker in valid_trackers])
 
 
+def determine_keep_nfo(meta: dict[str, Any], tracker_status: dict[str, Any], target_trackers: list[str]) -> bool:
+    """Return True if keep_nfo should be enabled for this upload.
+
+    Sets keep_nfo when:
+    - not already set, not a disc release
+    - at least one confirmed auto_nfo tracker (C411, TORR9, …) is in the upload set
+    - at least one .nfo file exists on disk next to the content
+    """
+    if meta.get("keep_nfo", False) or meta.get("is_disc", False):
+        return bool(meta.get("keep_nfo", False))
+
+    auto_nfo_confirmed = any(tracker_status.get(t, {}).get("upload", False) and t.upper() in nfo_auto_trackers for t in target_trackers)
+    if not auto_nfo_confirmed:
+        return False
+
+    content_path_str = str(meta.get("path", ""))
+    if os.path.isdir(content_path_str):
+        return any(f.lower().endswith(".nfo") for f in os.listdir(content_path_str))
+    return os.path.isfile(os.path.splitext(content_path_str)[0] + ".nfo")
+
+
 async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> Optional[bool]:
     """Process the metadata for each queued path."""
     if use_discord and bot:
@@ -1251,18 +1272,10 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> Optional[b
         # confirmed for upload but the user did not pass --keep-nfo explicitly.
         # This ensures BASE.torrent is created WITH NFO on the first (and only) full hash,
         # so those trackers can clone BASE directly instead of triggering a second rehash.
-        if not meta.get("keep_nfo", False) and not meta.get("is_disc", False):
-            auto_nfo_confirmed = any(tracker_status.get(t, {}).get("upload", False) and t.upper() in nfo_auto_trackers for t in target_trackers)
-            if auto_nfo_confirmed:
-                content_path_str = str(meta.get("path", ""))
-                if os.path.isdir(content_path_str):
-                    nfo_on_disk = any(f.lower().endswith(".nfo") for f in os.listdir(content_path_str))
-                else:
-                    nfo_on_disk = os.path.isfile(os.path.splitext(content_path_str)[0] + ".nfo")
-                if nfo_on_disk:
-                    meta["keep_nfo"] = True
-                    if meta.get("debug"):
-                        console.print("[cyan]Auto-enabled keep_nfo: NFO files found for auto-nfo trackers[/cyan]")
+        if determine_keep_nfo(meta, tracker_status, target_trackers):
+            meta["keep_nfo"] = True
+            if meta.get("debug"):
+                console.print("[cyan]Auto-enabled keep_nfo: NFO files found for auto-nfo trackers[/cyan]")
 
         # If --keep-nfo but BASE.torrent was created without the NFO (previous run),
         # remove the stale BASE.torrent so the client-reuse path can find a torrent
@@ -1329,9 +1342,13 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> Optional[b
                     if os.path.exists(nonfo_path):
                         meta["base_nonfo_path"] = nonfo_path
             except Exception as e:
-                console.print(
-                    f"[yellow]Warning: failed to create NFO-free torrent for skip_nfo trackers: {e}. These trackers will use BASE.torrent which may contain .nfo files.[/yellow]"
-                )
+                console.print(f"[yellow]Warning: failed to strip NFO from BASE.torrent: {e}. Falling back to full rehash for BASE_NONFO.[/yellow]")
+                try:
+                    await TorrentCreator.create_torrent(meta, Path(meta["path"]), "BASE_NONFO")
+                    if os.path.exists(nonfo_path):
+                        meta["base_nonfo_path"] = nonfo_path
+                except Exception as e2:
+                    console.print(f"[yellow]Warning: fallback rehash for BASE_NONFO also failed: {e2}. skip_nfo trackers will use BASE.torrent.[/yellow]")
 
         if os.path.exists(torrent_path):
             raw_trackers = meta.get("trackers")

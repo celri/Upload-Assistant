@@ -380,9 +380,8 @@ class TestProactiveKeepNfo:
         }
 
     def _run_proactive_detection(self, meta: dict[str, Any]) -> dict[str, Any]:
-        """Reproduce the proactive NFO detection block from upload.py."""
-        import os
-        from src.trackersetup import nfo_auto_trackers
+        """Call the real determine_keep_nfo helper from upload.py."""
+        from upload import determine_keep_nfo
 
         raw_trackers = meta.get("trackers")
         if isinstance(raw_trackers, str):
@@ -394,19 +393,8 @@ class TestProactiveKeepNfo:
 
         tracker_status = meta.get("tracker_status", {})
 
-        if not meta.get("keep_nfo", False) and not meta.get("is_disc", False):
-            auto_nfo_confirmed = any(
-                tracker_status.get(t, {}).get("upload", False) and t.upper() in nfo_auto_trackers
-                for t in target_trackers
-            )
-            if auto_nfo_confirmed:
-                content_path_str = str(meta.get("path", ""))
-                if os.path.isdir(content_path_str):
-                    nfo_on_disk = any(f.lower().endswith(".nfo") for f in os.listdir(content_path_str))
-                else:
-                    nfo_on_disk = os.path.isfile(os.path.splitext(content_path_str)[0] + ".nfo")
-                if nfo_on_disk:
-                    meta["keep_nfo"] = True
+        if determine_keep_nfo(meta, tracker_status, target_trackers):
+            meta["keep_nfo"] = True
 
         return meta
 
@@ -604,19 +592,74 @@ class TestBaseNonfoStrip:
         if not base_path.exists() or not skip_nfo:
             return
 
-        base_t = await asyncio.to_thread(Torrent.read, str(base_path))
-        if not any(str(f).lower().endswith(".nfo") for f in base_t.files):
-            return
+        meta: dict[str, Any] = {"path": content_path, "debug": False}
+        try:
+            base_t = await asyncio.to_thread(Torrent.read, str(base_path))
+            if not any(str(f).lower().endswith(".nfo") for f in base_t.files):
+                return
 
-        if nonfo_path.exists():
-            return
+            if nonfo_path.exists():
+                return
 
-        stripped = await TorrentCreator.strip_nfo_from_torrent(
-            str(base_path), str(nonfo_path), content_path
-        )
-        if not stripped:
-            meta: dict[str, Any] = {"path": content_path, "debug": False}
+            stripped = await TorrentCreator.strip_nfo_from_torrent(
+                str(base_path), str(nonfo_path), content_path
+            )
+            if not stripped:
+                await TorrentCreator.create_torrent(meta, Path(content_path), "BASE_NONFO")
+            if nonfo_path.exists():
+                meta["base_nonfo_path"] = str(nonfo_path)
+        except Exception:
             await TorrentCreator.create_torrent(meta, Path(content_path), "BASE_NONFO")
+            if nonfo_path.exists():
+                meta["base_nonfo_path"] = str(nonfo_path)
+
+    def test_torrent_read_raises_falls_back_to_full_rehash(self, tmp_path):
+        """If Torrent.read raises, the except block must fall back to full rehash
+        and set meta['base_nonfo_path'] when the output file is created."""
+        from torf import Torrent
+        from src.torrentcreate import TorrentCreator
+
+        base_path, release, uuid = self._make_base_torrent(tmp_path, with_nfo=True)
+        nonfo_path = base_path.parent / "BASE_NONFO.torrent"
+
+        create_torrent_calls = []
+
+        async def fake_create_torrent(meta, path, output_filename, **kw):
+            create_torrent_calls.append(output_filename)
+            nonfo_path.write_bytes(b"FAKE_NONFO")
+
+        with patch.object(Torrent, "read", side_effect=OSError("disk error")), \
+             patch.object(TorrentCreator, "create_torrent", side_effect=fake_create_torrent):
+            _run(self._run_base_nonfo_block(base_path, nonfo_path, str(release)))
+
+        assert "BASE_NONFO" in create_torrent_calls, \
+            "Full rehash must be triggered when Torrent.read raises"
+        assert nonfo_path.exists(), "BASE_NONFO.torrent must exist after fallback rehash"
+
+    def test_strip_raises_falls_back_to_full_rehash(self, tmp_path):
+        """If strip_nfo_from_torrent raises, the except block must fall back to
+        full rehash and set meta['base_nonfo_path'] when the output file exists."""
+        from src.torrentcreate import TorrentCreator
+
+        base_path, release, uuid = self._make_base_torrent(tmp_path, with_nfo=True)
+        nonfo_path = base_path.parent / "BASE_NONFO.torrent"
+
+        create_torrent_calls = []
+
+        async def fake_strip(*a, **kw):
+            raise RuntimeError("strip exploded")
+
+        async def fake_create_torrent(meta, path, output_filename, **kw):
+            create_torrent_calls.append(output_filename)
+            nonfo_path.write_bytes(b"FAKE_NONFO")
+
+        with patch.object(TorrentCreator, "strip_nfo_from_torrent", side_effect=fake_strip), \
+             patch.object(TorrentCreator, "create_torrent", side_effect=fake_create_torrent):
+            _run(self._run_base_nonfo_block(base_path, nonfo_path, str(release)))
+
+        assert "BASE_NONFO" in create_torrent_calls, \
+            "Full rehash must be triggered when strip_nfo_from_torrent raises"
+        assert nonfo_path.exists(), "BASE_NONFO.torrent must exist after fallback rehash"
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -750,8 +793,8 @@ class TestRecreateTorrentIfNfoNoExtraHash:
         # BASE has no NFO → no existing-torrent-with-NFO shortcut → full hash
         assert full_hash_calls, \
             "TorrentCreator.create_torrent must be called when BASE has no NFO"
-        assert tracker not in clone_calls or full_hash_calls, \
-            "Unexpected clone without full hash"
+        assert not (full_hash_calls and tracker in clone_calls), \
+            "When a full rehash runs, create_torrent_for_upload (clone) must NOT also run"
 
 
 # ═══════════════════════════════════════════════════════════════
