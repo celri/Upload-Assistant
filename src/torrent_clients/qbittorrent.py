@@ -696,7 +696,17 @@ class QbittorrentClientMixin:
         # rather than collapsing to a single video file.
         tracker_wants_nfo = meta.get("keep_nfo") and tracker.upper() not in nfo_skip_trackers
         single_file = len(meta["filelist"]) == 1 and os.path.isfile(meta["filelist"][0])
-        if single_file and not meta.get("keep_folder") and not tracker_wants_nfo:
+        # When keep_nfo=True the BASE torrent is multi-file (directory + mkv + nfo).
+        # After stripping the nfo for skip_nfo trackers the resulting torrent is still
+        # multi-file (info.files present).  If we only hardlink the single video file,
+        # qBittorrent creates the expected subdirectory but cannot find the file inside.
+        # We therefore treat a multi-file tracker torrent as a directory release so the
+        # whole folder is linked, with nfo skipped by async_link_directory.
+        try:
+            torrent_is_multi_file = bool(torrent.metainfo.get("info", {}).get("files"))
+        except Exception:
+            torrent_is_multi_file = False
+        if single_file and not meta.get("keep_folder") and not tracker_wants_nfo and not torrent_is_multi_file:
             src = meta["filelist"][0]
         else:
             src = meta.get("path")
@@ -704,7 +714,17 @@ class QbittorrentClientMixin:
             # directory (save_path for qBit) not the folder itself.
             # Guard with os.path.isdir(path) to avoid moving to grandparent
             # when path was already adjusted to the parent above.
-            if single_file and tracker_wants_nfo and not meta.get("keep_folder") and os.path.isdir(path):
+            if (
+                single_file
+                and tracker_wants_nfo
+                and not meta.get("keep_folder")
+                and os.path.isdir(path)
+                or single_file
+                and torrent_is_multi_file
+                and not tracker_wants_nfo
+                and not meta.get("keep_folder")
+                and os.path.isdir(path)
+            ):
                 path = os.path.dirname(path)
 
         if not src:
