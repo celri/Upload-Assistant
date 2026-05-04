@@ -752,3 +752,108 @@ class TestRecreateTorrentIfNfoNoExtraHash:
             "TorrentCreator.create_torrent must be called when BASE has no NFO"
         assert tracker not in clone_calls or full_hash_calls, \
             "Unexpected clone without full hash"
+
+
+# ═══════════════════════════════════════════════════════════════
+#  6. qBittorrent injection: src/save_path for skip_nfo multi-file torrent
+# ═══════════════════════════════════════════════════════════════
+
+
+class TestResolveSrcAndSavePath:
+    """_resolve_src_and_save_path: covers the LUME 'missing files' bug.
+
+    Before the fix: single_file=True caused src=meta["filelist"][0] even when
+    the tracker torrent was still multi-file after NFO stripping.  qBittorrent
+    created save_path/ReleaseName/ (the directory) but found nothing inside
+    because the file was linked directly as save_path/movie.mkv.
+
+    After the fix: torrent_is_multi_file is detected and the directory is used
+    as src so async_link_directory creates save_path/ReleaseName/movie.mkv.
+    """
+
+    def _make_torrent_obj(self, *, multi_file: bool):
+        """Return a minimal Torrent-like mock with the right metainfo structure."""
+        t = MagicMock()
+        if multi_file:
+            t.metainfo = {"info": {"files": [{"length": 1, "path": ["movie.mkv"]}]}}
+        else:
+            t.metainfo = {"info": {"length": 1}}
+        return t
+
+    def _make_meta(self, tmp_path: Path, *, keep_nfo: bool = False, keep_folder: bool = False):
+        release_dir = tmp_path / "Double.Indemnity.1944.MULTi.1080p.BluRay.x264-FiDELiO"
+        release_dir.mkdir()
+        mkv = release_dir / "movie.mkv"
+        mkv.write_bytes(b"FAKE")
+        return {
+            "path": str(release_dir),
+            "filelist": [str(mkv)],
+            "keep_nfo": keep_nfo,
+            "keep_folder": keep_folder,
+        }
+
+    def test_lume_single_file_single_file_torrent_uses_file_src(self, tmp_path):
+        """Classic case (no keep_nfo): single-file torrent → src = the mkv file."""
+        from src.torrent_clients.qbittorrent import QbittorrentClientMixin as QbittorrentClient
+
+        meta = self._make_meta(tmp_path, keep_nfo=False)
+        torrent = self._make_torrent_obj(multi_file=False)
+        path = meta["path"]  # release dir (save_path already adjusted by caller)
+
+        src, _ = QbittorrentClient._resolve_src_and_save_path(path, torrent, meta, "LUME")
+
+        assert src == meta["filelist"][0], "single-file torrent must use the mkv as src"
+
+    def test_lume_single_file_multi_file_torrent_uses_dir_src(self, tmp_path):
+        """Bug scenario (keep_nfo=True + skip_nfo tracker):
+        torrent is still multi-file after NFO strip → src must be the directory."""
+        from src.torrent_clients.qbittorrent import QbittorrentClientMixin as QbittorrentClient
+
+        meta = self._make_meta(tmp_path, keep_nfo=True)
+        torrent = self._make_torrent_obj(multi_file=True)
+        path = meta["path"]
+
+        src, _ = QbittorrentClient._resolve_src_and_save_path(path, torrent, meta, "LUME")
+
+        assert src == meta["path"], (
+            "multi-file torrent (after NFO strip) must use the release directory as src"
+        )
+
+    def test_lume_save_path_adjusted_to_parent_when_multi_file(self, tmp_path):
+        """save_path (path) must be the *parent* of the release dir for multi-file
+        so qBittorrent resolves save_path/ReleaseName/movie.mkv correctly."""
+        from src.torrent_clients.qbittorrent import QbittorrentClientMixin as QbittorrentClient
+
+        meta = self._make_meta(tmp_path, keep_nfo=True)
+        torrent = self._make_torrent_obj(multi_file=True)
+        path = meta["path"]  # release dir
+
+        _, save_path = QbittorrentClient._resolve_src_and_save_path(path, torrent, meta, "LUME")
+
+        assert save_path == str(tmp_path), (
+            "save_path must be the parent directory so qBit appends ReleaseName itself"
+        )
+
+    def test_c411_single_file_multi_file_torrent_uses_dir_src(self, tmp_path):
+        """auto_nfo tracker (C411, keep_nfo=True): src must also be the directory."""
+        from src.torrent_clients.qbittorrent import QbittorrentClientMixin as QbittorrentClient
+
+        meta = self._make_meta(tmp_path, keep_nfo=True)
+        torrent = self._make_torrent_obj(multi_file=True)
+        path = meta["path"]
+
+        src, _ = QbittorrentClient._resolve_src_and_save_path(path, torrent, meta, "C411")
+
+        assert src == meta["path"], "auto_nfo tracker with keep_nfo must use directory as src"
+
+    def test_keep_folder_always_uses_dir_src(self, tmp_path):
+        """keep_folder=True: must always use directory src regardless of torrent type."""
+        from src.torrent_clients.qbittorrent import QbittorrentClientMixin as QbittorrentClient
+
+        meta = self._make_meta(tmp_path, keep_folder=True)
+        torrent = self._make_torrent_obj(multi_file=False)
+        path = meta["path"]
+
+        src, _ = QbittorrentClient._resolve_src_and_save_path(path, torrent, meta, "LUME")
+
+        assert src == meta["path"], "keep_folder must force directory src"

@@ -667,6 +667,43 @@ class QbittorrentClientMixin:
             if created_session and qbt_session is not None:
                 await qbt_session.close()
 
+    @staticmethod
+    def _resolve_src_and_save_path(
+        path: str,
+        torrent: "Torrent",
+        meta: dict[str, Any],
+        tracker: str,
+    ) -> tuple[str, str]:
+        """Determine the hardlink source and qBittorrent save_path for a tracker.
+
+        Returns (src, save_path) where:
+        - src   is the file or directory to link from
+        - save_path is the directory qBittorrent should use as the download location
+
+        The tricky case is a skip_nfo tracker (e.g. LUME) when keep_nfo=True:
+        BASE.torrent was created as a multi-file directory torrent (mkv + nfo).
+        After stripping the nfo entry the resulting [LUME].torrent is still
+        multi-file (info.files present).  qBittorrent therefore expects the
+        content under save_path/ReleaseName/movie.mkv.  If we collapsed to a
+        single-file source we would create save_path/movie.mkv and qBittorrent
+        would report missing files.
+        """
+        tracker_wants_nfo = meta.get("keep_nfo") and tracker.upper() not in nfo_skip_trackers
+        single_file = len(meta["filelist"]) == 1 and os.path.isfile(meta["filelist"][0])
+        try:
+            torrent_is_multi_file = bool(torrent.metainfo.get("info", {}).get("files"))
+        except Exception:
+            torrent_is_multi_file = False
+
+        if single_file and not meta.get("keep_folder") and not tracker_wants_nfo and not torrent_is_multi_file:
+            src = meta["filelist"][0]
+        else:
+            src = meta.get("path", "")
+            if single_file and not meta.get("keep_folder") and os.path.isdir(path) and (tracker_wants_nfo or torrent_is_multi_file):
+                path = os.path.dirname(path)
+
+        return src, path
+
     async def qbittorrent(
         self,
         path: str,
@@ -694,38 +731,7 @@ class QbittorrentClientMixin:
         # When NFO files are included for this tracker the torrent was created
         # in folder mode (mkv + nfo), so we must also hardlink the whole folder
         # rather than collapsing to a single video file.
-        tracker_wants_nfo = meta.get("keep_nfo") and tracker.upper() not in nfo_skip_trackers
-        single_file = len(meta["filelist"]) == 1 and os.path.isfile(meta["filelist"][0])
-        # When keep_nfo=True the BASE torrent is multi-file (directory + mkv + nfo).
-        # After stripping the nfo for skip_nfo trackers the resulting torrent is still
-        # multi-file (info.files present).  If we only hardlink the single video file,
-        # qBittorrent creates the expected subdirectory but cannot find the file inside.
-        # We therefore treat a multi-file tracker torrent as a directory release so the
-        # whole folder is linked, with nfo skipped by async_link_directory.
-        try:
-            torrent_is_multi_file = bool(torrent.metainfo.get("info", {}).get("files"))
-        except Exception:
-            torrent_is_multi_file = False
-        if single_file and not meta.get("keep_folder") and not tracker_wants_nfo and not torrent_is_multi_file:
-            src = meta["filelist"][0]
-        else:
-            src = meta.get("path")
-            # When forcing folder mode for NFO, path must point to the parent
-            # directory (save_path for qBit) not the folder itself.
-            # Guard with os.path.isdir(path) to avoid moving to grandparent
-            # when path was already adjusted to the parent above.
-            if (
-                single_file
-                and tracker_wants_nfo
-                and not meta.get("keep_folder")
-                and os.path.isdir(path)
-                or single_file
-                and torrent_is_multi_file
-                and not tracker_wants_nfo
-                and not meta.get("keep_folder")
-                and os.path.isdir(path)
-            ):
-                path = os.path.dirname(path)
+        src, path = self._resolve_src_and_save_path(path, torrent, meta, tracker)
 
         if not src:
             error_msg = "[red]No source path found in meta."
