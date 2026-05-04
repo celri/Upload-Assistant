@@ -380,8 +380,8 @@ class TestProactiveKeepNfo:
         }
 
     def _run_proactive_detection(self, meta: dict[str, Any]) -> dict[str, Any]:
-        """Call the real determine_keep_nfo helper from upload.py."""
-        from upload import determine_keep_nfo
+        """Call the real determine_keep_nfo helper from src.trackersetup."""
+        from src.trackersetup import determine_keep_nfo
 
         raw_trackers = meta.get("trackers")
         if isinstance(raw_trackers, str):

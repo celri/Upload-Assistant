@@ -48,7 +48,16 @@ from src.trackerhandle import process_trackers
 from src.trackers.AR import AR
 from src.trackers.COMMON import COMMON
 from src.trackers.PTP import PTP
-from src.trackersetup import TRACKER_SETUP, api_trackers, http_trackers, nfo_auto_trackers, nfo_skip_trackers, notag_labels, other_api_trackers, tracker_class_map
+from src.trackersetup import (
+    TRACKER_SETUP,
+    api_trackers,
+    determine_keep_nfo,
+    http_trackers,
+    nfo_skip_trackers,
+    notag_labels,
+    other_api_trackers,
+    tracker_class_map,
+)
 from src.trackerstatus import TrackerStatusManager
 from src.uphelper import UploadHelper
 from src.uploadscreens import UploadScreensManager
@@ -425,27 +434,6 @@ async def validate_tracker_logins(meta: Meta, trackers: Optional[list[str]] = No
 
         # Run all tracker validations concurrently
         await asyncio.gather(*[validate_single_tracker(tracker) for tracker in valid_trackers])
-
-
-def determine_keep_nfo(meta: dict[str, Any], tracker_status: dict[str, Any], target_trackers: list[str]) -> bool:
-    """Return True if keep_nfo should be enabled for this upload.
-
-    Sets keep_nfo when:
-    - not already set, not a disc release
-    - at least one confirmed auto_nfo tracker (C411, TORR9, …) is in the upload set
-    - at least one .nfo file exists on disk next to the content
-    """
-    if meta.get("keep_nfo", False) or meta.get("is_disc", False):
-        return bool(meta.get("keep_nfo", False))
-
-    auto_nfo_confirmed = any(tracker_status.get(t, {}).get("upload", False) and t.upper() in nfo_auto_trackers for t in target_trackers)
-    if not auto_nfo_confirmed:
-        return False
-
-    content_path_str = str(meta.get("path", ""))
-    if os.path.isdir(content_path_str):
-        return any(f.lower().endswith(".nfo") for f in os.listdir(content_path_str))
-    return os.path.isfile(os.path.splitext(content_path_str)[0] + ".nfo")
 
 
 async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> Optional[bool]:

@@ -1469,3 +1469,30 @@ nfo_auto_trackers = frozenset(name for name, cls in tracker_class_map.items() if
 
 # Trackers that accept releases without a group tag, mapped to their replacement label (derived from notag_label class attr)
 notag_labels: dict[str, str] = {name: cls.notag_label for name, cls in tracker_class_map.items() if getattr(cls, "notag_label", "")}
+
+
+def determine_keep_nfo(meta: dict, tracker_status: dict, target_trackers: list) -> bool:
+    """Return True if keep_nfo should be enabled for this upload.
+
+    Sets keep_nfo when:
+    - not already set, not a disc release
+    - at least one confirmed auto_nfo tracker (C411, TORR9, …) is in the upload set
+    - at least one .nfo file exists on disk next to the content
+
+    Lives in trackersetup so it can be imported from tests without triggering
+    upload.py's module-level config check (which calls sys.exit when config.py
+    is absent, as in CI).
+    """
+    import os
+
+    if meta.get("keep_nfo", False) or meta.get("is_disc", False):
+        return bool(meta.get("keep_nfo", False))
+
+    auto_nfo_confirmed = any(tracker_status.get(t, {}).get("upload", False) and t.upper() in nfo_auto_trackers for t in target_trackers)
+    if not auto_nfo_confirmed:
+        return False
+
+    content_path_str = str(meta.get("path", ""))
+    if os.path.isdir(content_path_str):
+        return any(f.lower().endswith(".nfo") for f in os.listdir(content_path_str))
+    return os.path.isfile(os.path.splitext(content_path_str)[0] + ".nfo")
