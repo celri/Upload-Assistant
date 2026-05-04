@@ -932,3 +932,48 @@ class TestResolveSrcAndSavePath:
         src, _ = QbittorrentClient._resolve_src_and_save_path(path, torrent, meta, "LUME")
 
         assert src == path, "keep_folder must force directory src"
+
+    def test_season_pack_c411_src_is_release_dir_not_parent(self, tmp_path):
+        """Regression: season pack (multi-file) with auto_nfo tracker (C411).
+
+        qbittorrent() pre-adjusts path to os.path.dirname(release_dir) because
+        len(filelist) != 1.  _resolve_src_and_save_path must still return src =
+        release_dir (meta['path']), NOT the pre-adjusted parent.
+
+        If src were the parent directory, os.path.basename(src) would be e.g.
+        'tv-completed' and async_link_directory would create
+        tracker_dir/tv-completed/Avatar.../ instead of tracker_dir/Avatar.../.
+        """
+        from src.torrent_clients.qbittorrent import QbittorrentClientMixin as QbittorrentClient
+
+        # Season pack: multiple episode files
+        category_dir = tmp_path / "tv-completed"
+        category_dir.mkdir()
+        release_dir = category_dir / "Avatar.The.Last.Airbender.S03.MULTI.1080p.BluRay.x264-FTMVHD"
+        release_dir.mkdir()
+        ep1 = release_dir / "ep01.mkv"
+        ep2 = release_dir / "ep02.mkv"
+        ep1.write_bytes(b"EP1")
+        ep2.write_bytes(b"EP2")
+
+        meta = {
+            "path": str(release_dir),
+            "filelist": [str(ep1), str(ep2)],  # multiple files → single_file=False
+            "keep_nfo": True,
+            "keep_folder": False,
+        }
+        torrent = self._make_torrent_obj(multi_file=True)
+
+        # Simulate what qbittorrent() does: len(filelist) != 1 → path = parent dir
+        path_after_normalization = str(category_dir)
+
+        src, _ = QbittorrentClient._resolve_src_and_save_path(
+            path_after_normalization, torrent, meta, "C411"
+        )
+
+        assert src == str(release_dir), (
+            "Season pack src must be the release directory, not the pre-adjusted parent. "
+            f"Got {src!r}, expected {str(release_dir)!r}. "
+            "If src were the parent, os.path.basename(src) would be 'tv-completed' and "
+            "the hardlink would create tracker_dir/tv-completed/ instead of tracker_dir/Avatar.../"
+        )
