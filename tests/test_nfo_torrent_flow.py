@@ -854,17 +854,44 @@ class TestResolveSrcAndSavePath:
 
     def test_lume_single_file_multi_file_torrent_uses_dir_src(self, tmp_path):
         """Bug scenario (keep_nfo=True + skip_nfo tracker):
-        torrent is still multi-file after NFO strip → src must be the directory."""
+        torrent is still multi-file after NFO strip → src must be the release directory."""
         from src.torrent_clients.qbittorrent import QbittorrentClientMixin as QbittorrentClient
 
         meta = self._make_meta(tmp_path, keep_nfo=True)
         torrent = self._make_torrent_obj(multi_file=True)
-        path = meta["path"]
+        path = meta["path"]  # release dir (already normalised by caller)
 
         src, _ = QbittorrentClient._resolve_src_and_save_path(path, torrent, meta, "LUME")
 
-        assert src == meta["path"], (
+        assert src == path, (
             "multi-file torrent (after NFO strip) must use the release directory as src"
+        )
+
+    def test_lume_multi_file_torrent_src_uses_path_not_meta_path(self, tmp_path):
+        """Regression: when meta['path'] is a file but path (normalised by caller)
+        is the release directory, src must be the directory, not the file."""
+        from src.torrent_clients.qbittorrent import QbittorrentClientMixin as QbittorrentClient
+
+        release_dir = tmp_path / "Double.Indemnity.1944.MULTi.1080p.BluRay.x264-FiDELiO"
+        release_dir.mkdir()
+        mkv = release_dir / "movie.mkv"
+        mkv.write_bytes(b"FAKE")
+        meta = {
+            "path": str(mkv),          # file path — as seen in some caller contexts
+            "filelist": [str(mkv)],
+            "keep_nfo": True,
+            "keep_folder": False,
+        }
+        torrent = self._make_torrent_obj(multi_file=True)
+        path = str(release_dir)  # normalised to release dir by qbittorrent() caller
+
+        src, save_path = QbittorrentClient._resolve_src_and_save_path(path, torrent, meta, "LUME")
+
+        assert src == str(release_dir), (
+            "src must be the release directory (path), not meta['path'] which is a file"
+        )
+        assert save_path == str(tmp_path), (
+            "save_path must be the parent directory"
         )
 
     def test_lume_save_path_adjusted_to_parent_when_multi_file(self, tmp_path):
@@ -892,7 +919,7 @@ class TestResolveSrcAndSavePath:
 
         src, _ = QbittorrentClient._resolve_src_and_save_path(path, torrent, meta, "C411")
 
-        assert src == meta["path"], "auto_nfo tracker with keep_nfo must use directory as src"
+        assert src == path, "auto_nfo tracker with keep_nfo must use directory as src"
 
     def test_keep_folder_always_uses_dir_src(self, tmp_path):
         """keep_folder=True: must always use directory src regardless of torrent type."""
@@ -904,4 +931,4 @@ class TestResolveSrcAndSavePath:
 
         src, _ = QbittorrentClient._resolve_src_and_save_path(path, torrent, meta, "LUME")
 
-        assert src == meta["path"], "keep_folder must force directory src"
+        assert src == path, "keep_folder must force directory src"

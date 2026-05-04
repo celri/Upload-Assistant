@@ -698,7 +698,10 @@ class QbittorrentClientMixin:
         if single_file and not meta.get("keep_folder") and not tracker_wants_nfo and not torrent_is_multi_file:
             src = meta["filelist"][0]
         else:
-            src = meta.get("path", "")
+            # Capture the release directory as src BEFORE dirname adjustment.
+            # meta["path"] may be a file path (e.g. the raw mkv) while path has
+            # already been normalised to the release directory by the caller.
+            src = path
             if single_file and not meta.get("keep_folder") and os.path.isdir(path) and (tracker_wants_nfo or torrent_is_multi_file):
                 path = os.path.dirname(path)
 
