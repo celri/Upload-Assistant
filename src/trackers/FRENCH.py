@@ -371,6 +371,11 @@ class FrenchTrackerMixin:
     (instance of :class:`src.tmdb.TmdbManager`).
     """
 
+    # Signals that this tracker auto-detects NFO files on disk and includes them in
+    # the torrent.  Used by upload.py to proactively set keep_nfo before BASE creation
+    # so that BASE.torrent already contains the NFO (avoids a later full rehash).
+    auto_nfo: bool = True
+
     # Subclasses may override to change the WEBDL source label in release names
     # e.g. "WEB" (C411/TORR9/LACALE) vs "WEB-DL" (G3MINI)
     WEB_LABEL: str = "WEB"
