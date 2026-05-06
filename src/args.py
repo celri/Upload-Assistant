@@ -410,6 +410,7 @@ class Args:
             dest="spd_channel",
             default="",
         )
+        parser.add_argument("-excl", "--exclusive", nargs=1, required=False, help="Set exclusive flag on all supported trackers", dest="exclusive")
         parsed_args_ns, before_args = parser.parse_known_args(input)
         parsed_args: dict[str, Any] = vars(parsed_args_ns)
         # console.print(args)
