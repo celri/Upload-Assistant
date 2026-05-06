@@ -4,6 +4,7 @@ import json
 import os
 import re
 import unicodedata
+import urllib.parse
 from typing import Any, cast
 
 import aiofiles
@@ -776,7 +777,9 @@ class GPW:
                     cli_ui.ask_string, f"{self.tracker}: Enter the poster image URL (must be from one of {', '.join(self.approved_image_hosts)}): \n"
                 )
                 poster_url = (poster_url_raw or "").strip()
-                if any(host in poster_url for host in self.approved_image_hosts):
+                parsed = urllib.parse.urlparse(poster_url)
+                hostname = parsed.netloc.lower().split(":")[0]
+                if parsed.scheme and hostname and any(hostname == host or hostname.endswith("." + host) for host in self.approved_image_hosts):
                     break
                 else:
                     console.print("[red]Invalid host. Please use a URL from the allowed hosts.[/red]")

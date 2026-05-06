@@ -119,7 +119,7 @@ _SKIP_DIRS = {"__pycache__", ".mypy_cache", ".ruff_cache"}
 
 # Built-in metadata files that should track the image version even when
 # /Upload-Assistant/data is a persistent volume from an older container.
-_ALWAYS_SYNC_ROOT_FILES = {"version.py"}
+_ALWAYS_SYNC_ROOT_FILES = {"version.py", "example-config.py"}
 
 if os.path.isdir(_defaults_data_dir):
     os.makedirs(_data_dir, exist_ok=True)
