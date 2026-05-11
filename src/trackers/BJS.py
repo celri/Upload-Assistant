@@ -474,6 +474,9 @@ class BJS:
 
             try:
                 if int(current_season) == int(params["upload_season_num"]):
+                    res_ok = not params["upload_resolution"] or not current_resolution or current_resolution.lower() == str(params["upload_resolution"]).lower()
+                    if not res_ok:
+                        return False
                     if params["is_tv_pack"]:
                         return is_pack
                     else:
@@ -598,6 +601,8 @@ class BJS:
             torrent_id = task_info.get("torrent_id", "")
 
             item_name = self._extract_item_name(soup_obj, torrent_id)
+            if not item_name:
+                item_name = task_info.get("description_text") or task_info.get("title") or ""
 
             torrent_description = ""
             desc_block = soup_obj.find(lambda tag: tag.name == "blockquote" and "Informações Adicionais:" in tag.get_text())
