@@ -72,6 +72,43 @@ class G3MINI(FrenchTrackerMixin, UNIT3D):
             resolved_id = resolution_id.get(meta_resolution, "10")
             return {"resolution_id": resolved_id}
 
+    def _check_g3mini_specific_dupes(
+        self,
+        all_dupes: list[dict[str, Any]],
+        filtered: list[dict[str, Any]],
+        meta: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        """Re-inject integrale dupes that must always block a G3MINI season-pack upload.
+
+        When uploading a season pack and an existing torrent's name contains
+        "integrale" (case-insensitive), that torrent is kept as a blocking dupe
+        regardless of language (same rule as TOS).
+        """
+        is_season_pack = meta.get("tv_pack", False) and meta.get("category") == "TV"
+        if not is_season_pack:
+            return filtered
+
+        result = list(filtered)
+        for dupe in all_dupes:
+            if not isinstance(dupe, dict):
+                continue
+            if "integrale" in dupe.get("name", "").lower():
+                if dupe not in result:
+                    result.append(dupe)
+                stored = next(x for x in result if x == dupe)
+                flags: list[str] = stored.setdefault("flags", [])
+                if "integrale_supersede" not in flags:
+                    flags.append("integrale_supersede")
+        return result
+
+    async def search_existing(self, meta: dict[str, Any], _: Any = None) -> list[dict[str, Any]]:
+        """Wrap the standard French dupe check with G3MINI's integrale rule."""
+        from src.trackers.UNIT3D import UNIT3D as _UNIT3D
+
+        raw_dupes = await _UNIT3D.search_existing(self, meta, _)
+        filtered = await self._check_french_lang_dupes(raw_dupes, meta)
+        return self._check_g3mini_specific_dupes(raw_dupes, filtered, meta)
+
     async def get_additional_checks(self, meta: dict[str, Any]) -> bool:
         french_languages = ["french", "fre", "fra", "fr", "français", "francais", "fr-fr", "fr-ca"]
         # check or ignore audio req config
@@ -142,7 +179,7 @@ class G3MINI(FrenchTrackerMixin, UNIT3D):
             dvd_size = meta.get("dvd_size", "")
         else:
             video_codec = meta.get("video_codec", "")
-            video_encode = meta.get("video_encode", "")
+            video_encode = meta.get("video_encode", "").replace("H.264", "H264").replace("H.265", "H265")
         edition = self._format_edition(meta.get("edition", ""))
         if "hybrid" in edition.upper():
             edition = edition.replace("Hybrid", "").strip()
@@ -155,6 +192,8 @@ class G3MINI(FrenchTrackerMixin, UNIT3D):
                 episode = ""
         if meta.get("no_season", False) is True:
             season = ""
+        # Season pack: append COMPLETE when uploading a full season without an episode number
+        season_ep = season + (" COMPLETE" if meta.get("tv_pack") and season and not episode else episode)
         if meta.get("no_year", False) is True:
             year = ""
         if meta.get("no_aka", False) is True:
@@ -192,25 +231,25 @@ class G3MINI(FrenchTrackerMixin, UNIT3D):
         elif meta["category"] == "TV":  # TV SPECIFIC
             if type == "DISC":  # Disk
                 if meta["is_disc"] == "BDMV":
-                    name = f"{title} {year} {season}{episode} {three_d} {edition} {repack} {language} {resolution} {region} {uhd} {source} {hybrid} {hdr} {audio} {video_codec}"
+                    name = f"{title} {year} {season_ep} {three_d} {edition} {repack} {language} {resolution} {region} {uhd} {source} {hybrid} {hdr} {audio} {video_codec}"
                 if meta["is_disc"] == "DVD":
-                    name = f"{title} {year} {season}{episode}{three_d} {repack} {edition} {region} {source} {dvd_size} {audio}"
+                    name = f"{title} {year} {season_ep} {three_d} {repack} {edition} {region} {source} {dvd_size} {audio}"
                 elif meta["is_disc"] == "HDDVD":
-                    name = f"{title} {year} {season}{episode} {three_d} {edition} {repack} {language} {resolution} {source} {audio} {video_codec}"
+                    name = f"{title} {year} {season_ep} {three_d} {edition} {repack} {language} {resolution} {source} {audio} {video_codec}"
             elif type == "REMUX" and source in ("BluRay", "HDDVD"):  # BluRay Remux
-                name = f"{title} {year} {season}{episode} {part} {three_d} {edition} {repack} {language} {resolution} {uhd} {source} REMUX {hybrid} {hdr} {audio} {video_codec}"  # SOURCE
+                name = f"{title} {year} {season_ep} {part} {three_d} {edition} {repack} {language} {resolution} {uhd} {source} REMUX {hybrid} {hdr} {audio} {video_codec}"  # SOURCE
             elif type == "REMUX" and source in ("PAL DVD", "NTSC DVD", "DVD"):  # DVD Remux
-                name = f"{title} {year} {season}{episode} {part} {edition} {repack} {source} REMUX {audio}"  # SOURCE
+                name = f"{title} {year} {season_ep} {part} {edition} {repack} {source} REMUX {audio}"  # SOURCE
             elif type == "ENCODE":  # Encode
-                name = f"{title} {year} {season}{episode} {part} {edition} {repack} {language} {resolution} {uhd} {source} {hybrid} {hdr} {audio} {video_encode}"  # SOURCE
+                name = f"{title} {year} {season_ep} {part} {edition} {repack} {language} {resolution} {uhd} {source} {hybrid} {hdr} {audio} {video_encode}"  # SOURCE
             elif type == "WEBDL":  # WEB-DL
-                name = f"{title} {year} {season}{episode} {part} {edition} {repack} {language} {resolution} {uhd} {service} WEB-DL {hybrid} {hdr} {audio} {video_encode}"
+                name = f"{title} {year} {season_ep} {part} {edition} {repack} {language} {resolution} {uhd} {service} WEB-DL {hybrid} {hdr} {audio} {video_encode}"
             elif type == "WEBRIP":  # WEBRip
-                name = f"{title} {year} {season}{episode} {part} {edition} {repack} {language} {resolution} {uhd} {service} WEBRip {hybrid} {hdr} {audio} {video_encode}"
+                name = f"{title} {year} {season_ep} {part} {edition} {repack} {language} {resolution} {uhd} {service} WEBRip {hybrid} {hdr} {audio} {video_encode}"
             elif type == "HDTV":  # HDTV
-                name = f"{title} {year} {season}{episode} {part} {edition} {repack} {language} {resolution} {source} {audio} {video_encode}"
+                name = f"{title} {year} {season_ep} {part} {edition} {repack} {language} {resolution} {source} {audio} {video_encode}"
             elif type == "DVDRIP":
-                name = f"{title} {year} {season}{episode} {language} {source} DVDRip {audio} {video_encode}"
+                name = f"{title} {year} {season_ep} {language} {source} DVDRip {audio} {video_encode}"
 
         try:
             name = " ".join(name.split())
