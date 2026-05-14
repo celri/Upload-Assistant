@@ -153,62 +153,111 @@ class DP(UNIT3D):
         return data
 
     async def get_audio(self, meta: dict[str, Any]) -> str:
-        languages_result = "SKIPPED"
-
         if not meta.get("language_checked", False):
             await languages_manager.process_desc_language(meta, tracker=self.tracker)
 
         audio_languages = meta.get("audio_languages")
-        if isinstance(audio_languages, list):
-            audio_languages_list = cast(list[Any], audio_languages)
-            # Deduplicate while preserving track order (first = primary)
-            seen: set[str] = set()
-            unique_languages: list[str] = []
-            for lang in audio_languages_list:
-                s = str(lang).strip()
-                if s and s not in seen:
-                    seen.add(s)
-                    unique_languages.append(s)
+        if not isinstance(audio_languages, list):
+            return "SKIPPED"
 
-            if len(unique_languages) > 2:
-                languages_result = "MULTi"
-            elif len(unique_languages) == 2:
-                has_french = await languages_manager.has_french_language(unique_languages)
-                if has_french:
-                    languages_result = "French MULTi"
-                else:
-                    # Find the language that is NOT the original language of the content.
-                    # meta["original_language"] is an ISO 639-1/2 code (e.g. "en", "de").
-                    orig_code = str(meta.get("original_language") or "").strip().lower()
-                    orig_canonical = ""
-                    if orig_code:
-                        try:
-                            lang_obj = pycountry.languages.get(alpha_2=orig_code) or pycountry.languages.get(alpha_3=orig_code)
-                            if lang_obj:
-                                orig_canonical = getattr(lang_obj, "alpha_2", None) or getattr(lang_obj, "alpha_3", None) or getattr(lang_obj, "bibliographic", None) or ""
-                        except Exception:
-                            orig_canonical = orig_code
-                    # Pick the language whose canonical ISO code differs from the original's.
-                    # Fall back to unique_languages[1] if lookup fails or nothing differs.
-                    non_orig = unique_languages[1]
-                    if orig_canonical:
-                        for lang in unique_languages:
-                            try:
-                                obj = pycountry.languages.lookup(lang)
-                                code = getattr(obj, "alpha_2", None) or getattr(obj, "alpha_3", None) or getattr(obj, "bibliographic", None) or ""
-                                if code != orig_canonical:
-                                    non_orig = lang
-                                    break
-                            except LookupError:
-                                if lang.lower() != orig_canonical:
-                                    non_orig = lang
-                                    break
-                    display = non_orig[0].upper() + non_orig[1:]
-                    languages_result = f"{display} MULTi"
-            else:
-                languages_result = str(next(iter(unique_languages), "SKIPPED"))
+        audio_languages_list = cast(list[Any], audio_languages)
+        seen: set[str] = set()
+        unique_languages: list[str] = []
+        for lang in audio_languages_list:
+            s = str(lang).strip()
+            if s and s not in seen:
+                seen.add(s)
+                unique_languages.append(s)
 
-        return languages_result
+        if not unique_languages:
+            return "SKIPPED"
+
+        # Disc releases: no dub tag per naming guide
+        if meta.get("is_disc"):
+            return ""
+
+        # Resolve original language to its ISO alpha_2 code
+        orig_code = str(meta.get("original_language") or "").strip().lower()
+        orig_canonical = ""
+        if orig_code:
+            try:
+                lang_obj = pycountry.languages.get(alpha_2=orig_code) or pycountry.languages.get(alpha_3=orig_code)
+                if lang_obj:
+                    orig_canonical = getattr(lang_obj, "alpha_2", None) or getattr(lang_obj, "alpha_3", None) or getattr(lang_obj, "bibliographic", None) or ""
+            except Exception:
+                orig_canonical = orig_code
+
+        is_english_original = orig_canonical in ("en", "eng") or orig_code in ("en", "eng")
+        nordic_codes = {"da", "sv", "no", "fi", "is", "nb", "nn"}
+        is_nordic_original = orig_canonical in nordic_codes
+
+        def resolve_code(lang: str) -> str:
+            try:
+                obj = pycountry.languages.lookup(lang)
+                return getattr(obj, "alpha_2", None) or getattr(obj, "alpha_3", None) or getattr(obj, "bibliographic", None) or lang.lower()
+            except LookupError:
+                return lang.lower()
+
+        resolved = [resolve_code(lang) for lang in unique_languages]
+        has_original = (orig_canonical in resolved) if orig_canonical else False
+        has_english = "en" in resolved
+
+        n = len(unique_languages)
+
+        # ── 1 language ────────────────────────────────────────────────────────
+        if n == 1:
+            lang_code = resolved[0]
+            lang_display = unique_languages[0][0].upper() + unique_languages[0][1:]
+            if has_original:
+                return ""  # original language only → no tag
+            if has_english and not is_english_original:
+                return "Dubbed"  # English-only on non-English original
+            if lang_code in nordic_codes and not is_english_original and not is_nordic_original:
+                return f"{lang_display} Dubbed"  # Nordic-only on non-English/non-Nordic original
+            return ""
+
+        # ── 3+ languages ──────────────────────────────────────────────────────
+        if n >= 3:
+            return "MULTi"
+
+        # ── 2 languages ───────────────────────────────────────────────────────
+        # Non-English original + original track + English track → Dual-Audio
+        if not is_english_original and has_original and has_english:
+            return "Dual-Audio"
+
+        # Find the "label" language for Language MULTi.
+        # Priority: if English is present (and not the original), it is the anchor
+        # and the other language is the label; otherwise the non-original is the label.
+        label_lang = unique_languages[1]  # safe fallback
+        if is_english_original:
+            for lang, code in zip(unique_languages, resolved):
+                if code not in ("en", "eng"):
+                    label_lang = lang
+                    break
+        elif has_english and not has_original:
+            # No original track in audio; English acts as anchor
+            for lang, code in zip(unique_languages, resolved):
+                if code not in ("en", "eng"):
+                    label_lang = lang
+                    break
+        else:
+            for lang, code in zip(unique_languages, resolved):
+                if code != orig_canonical:
+                    label_lang = lang
+                    break
+
+        # French label → "French MULTi" (DP is a French-primary tracker)
+        try:
+            label_obj = pycountry.languages.lookup(label_lang)
+            label_code = getattr(label_obj, "alpha_2", None) or ""
+            if label_code == "fr":
+                return "French MULTi"
+        except LookupError:
+            if label_lang.lower().startswith("fr"):
+                return "French MULTi"
+
+        display = label_lang[0].upper() + label_lang[1:]
+        return f"{display} MULTi"
 
     async def get_name(self, meta: dict[str, Any]) -> dict[str, str]:
         dp_name = str(meta.get("name", ""))
@@ -219,5 +268,19 @@ class DP(UNIT3D):
                 dp_name = dp_name.replace("Dual-Audio", audio)
             elif "MULTi" in dp_name and audio not in dp_name:
                 dp_name = dp_name.replace("MULTi", audio)
+            elif "Dubbed" in dp_name and audio not in dp_name:
+                # e.g. "Dubbed" → "Swedish Dubbed"
+                dp_name = dp_name.replace("Dubbed", audio)
+            elif audio not in dp_name:
+                # No existing dub token (e.g. Nordic-only on Japanese content where
+                # audio.py doesn't set "Dubbed"): insert before the audio codec string.
+                audio_raw = str(meta.get("audio", "")).strip()
+                audio_codec = audio_raw
+                for prefix in ("Dual-Audio ", "Dubbed ", "MULTi "):
+                    if audio_raw.startswith(prefix):
+                        audio_codec = audio_raw[len(prefix) :]
+                        break
+                if audio_codec and audio_codec in dp_name:
+                    dp_name = dp_name.replace(audio_codec, f"{audio} {audio_codec}", 1)
 
         return {"name": dp_name}
