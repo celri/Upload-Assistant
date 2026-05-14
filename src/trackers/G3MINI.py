@@ -133,6 +133,41 @@ class G3MINI(FrenchTrackerMixin, UNIT3D):
             console.print(f"[bold red]Language requirements not met for {self.tracker}.[/bold red]")
             return False
 
+        # G3MINI requires x264 encodes to use at least the "slow" preset.
+        # The preset name is never stored explicitly in Encoded_Library_Settings for
+        # scene releases, so we infer quality from key parameters:
+        #   subme : medium=7, slow=8, slower=9, veryslow=10+  → require >= 8
+        #   trellis: medium=1, slow=2                          → require >= 2
+        # Both conditions must be met to pass (either alone could be a custom override).
+        if not meta.get("is_disc") and meta.get("video_codec") == "x264" and meta.get("type") in {"ENCODE", "WEBRIP"}:
+            tracks = meta.get("mediainfo", {}).get("media", {}).get("track", [])
+            for track in tracks:
+                if track.get("@type") == "Video":
+                    encoding_settings = track.get("Encoded_Library_Settings", "") or ""
+                    if not encoding_settings:
+                        if meta.get("debug", False):
+                            console.print(f"[yellow]{self.tracker}: No Encoded_Library_Settings found — skipping preset check.[/yellow]")
+                        break
+
+                    subme_match = re.search(r"\bsubme\s*=\s*(\d+)", encoding_settings, re.IGNORECASE)
+                    trellis_match = re.search(r"\btrellis\s*=\s*(\d+)", encoding_settings, re.IGNORECASE)
+                    subme = int(subme_match.group(1)) if subme_match else None
+                    trellis = int(trellis_match.group(1)) if trellis_match else None
+
+                    if meta.get("debug", False):
+                        console.print(f"[cyan]{self.tracker}: x264 subme={subme}, trellis={trellis}[/cyan]")
+
+                    # Reject if either parameter is at medium level or worse
+                    if (subme is not None and subme < 8) or (trellis is not None and trellis < 2):
+                        details = []
+                        if subme is not None and subme < 8:
+                            details.append(f"subme={subme} (minimum 8 for 'slow')")
+                        if trellis is not None and trellis < 2:
+                            details.append(f"trellis={trellis} (minimum 2 for 'slow')")
+                        console.print(f"[bold red]{self.tracker}: x264 encode quality is below the 'slow' preset minimum: {', '.join(details)}.[/bold red]")
+                        return False
+                    break
+
         return True
 
     # https://gemini-tracker.org/pages/7
