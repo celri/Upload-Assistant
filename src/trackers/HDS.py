@@ -205,10 +205,9 @@ class HDS:
                     name_tag = row.select_one('a[href*="page=torrent-details"]')
                     if not name_tag:
                         continue
-                    name = name_tag.get_text(strip=True)
-
-                    if not name and name_tag.has_attr("title"):
-                        name = str(name_tag["title"])
+                    # Prefer the title attribute — it holds the full torrent name,
+                    # whereas the link text may be truncated by the page layout.
+                    name = str(name_tag["title"]) if name_tag.has_attr("title") and name_tag["title"] else name_tag.get_text(strip=True)
                     href_value = name_tag.get("href", "")
                     link_path = str(href_value).lstrip("/")
                     torrent_link = f"{self.base_url.rstrip('/')}/{link_path}"
@@ -241,7 +240,6 @@ class HDS:
                 console.print(f"[bold red]Error searching for duplicates on page {current_page} of {self.tracker}: {e}[/bold red]")
                 break
 
-        console.print(f"[bold green]Found {len(dupes)} duplicates on {self.tracker}[/bold green]")
         return dupes
 
     async def get_category_id(self, meta: Meta) -> int:
