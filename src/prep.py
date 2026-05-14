@@ -1358,6 +1358,17 @@ class Prep:
                     console.print(f"[cyan]Matched TV pattern in filename: {pattern}[/cyan]")
                 return "TV"
 
+        # If the folder contains multiple video files whose basenames each match episode
+        # patterns (e.g. S01E01, S01E02 …), treat the whole pack as a TV series even when
+        # the folder name itself carries no season/episode marker.
+        filelist = cast(list[str], meta.get("filelist") or [])
+        if len(filelist) > 1:
+            episode_matches = sum(1 for f in filelist if re.search(r"(?i)\bs\d{1,2}e\d{1,2}\b|\b\d{1,2}x\d{2}\b", os.path.basename(f)))
+            if episode_matches >= 2:
+                if meta.get("debug", False):
+                    console.print(f"[cyan]Detected TV pack: {episode_matches}/{len(filelist)} files match episode pattern[/cyan]")
+                return "TV"
+
         if "subsplease" in path.lower() or "subsplease" in uuid.lower():
             anime_pattern = r"(?:\s-\s)?(\d{1,3})\s*\((?:\d+p|480p|480i|576i|576p|720p|1080i|1080p|2160p)\)"
             if re.search(anime_pattern, path.lower()) or re.search(anime_pattern, uuid.lower()):

@@ -28,8 +28,15 @@ erase_key: Optional[str] = None
 
 
 class CleanupManager:
-    async def cleanup(self) -> None:
-        """Ensure all running tasks, threads, and subprocesses are properly cleaned up before exiting."""
+    async def cleanup(self, cancel_tasks: bool = True) -> None:
+        """Ensure all running tasks, threads, and subprocesses are properly cleaned up before exiting.
+
+        Args:
+            cancel_tasks: If False, skip the asyncio task cancellation step (Step 5).
+                          Use False when calling from within a coroutine that is itself a
+                          child task of asyncio.gather — cancelling all tasks from there
+                          would cancel the parent gather task and cause circular cancellation.
+        """
         # console.print("[yellow]Cleaning up tasks before exiting...[/yellow]")
 
         # Step 1: Shutdown ThreadPoolExecutor **before checking for threads**
@@ -81,33 +88,37 @@ class CleanupManager:
             await asyncio.sleep(0.1)
 
         # 🔹 Step 5: Cancel all running asyncio tasks **gracefully**
-        try:
-            tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
-            # console.print(f"[yellow]Cancelling {len(tasks)} remaining tasks...[/yellow]")
+        # Skipped when cancel_tasks=False to avoid cancelling a parent gather task
+        # from within a child coroutine, which would cause circular cancellation in
+        # Python 3.13 (parent cancel → gather cancels children → this sleep raises CancelledError).
+        if cancel_tasks:
+            try:
+                tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+                # console.print(f"[yellow]Cancelling {len(tasks)} remaining tasks...[/yellow]")
 
-            for task in tasks:
-                task.cancel()
+                for task in tasks:
+                    task.cancel()
 
-            # Stage 1: Give tasks a moment to cancel themselves
-            with contextlib.suppress(RuntimeError):
-                await asyncio.sleep(0.1)
+                # Stage 1: Give tasks a moment to cancel themselves
+                with contextlib.suppress(RuntimeError):
+                    await asyncio.sleep(0.1)
 
-            # Stage 2: Gather tasks with exception handling
-            if tasks:  # Only gather if there are tasks
-                try:
-                    results = await asyncio.gather(*tasks, return_exceptions=True)
-                except RuntimeError:
-                    # Event loop is no longer running, skip gather
+                # Stage 2: Gather tasks with exception handling
+                if tasks:  # Only gather if there are tasks
+                    try:
+                        results = await asyncio.gather(*tasks, return_exceptions=True)
+                    except RuntimeError:
+                        # Event loop is no longer running, skip gather
+                        results = []
+                else:
                     results = []
-            else:
+            except RuntimeError:
+                # Event loop is no longer running, skip task cleanup
                 results = []
-        except RuntimeError:
-            # Event loop is no longer running, skip task cleanup
-            results = []
 
-        for result in results:
-            if isinstance(result, Exception) and not isinstance(result, asyncio.CancelledError):
-                console.print(f"[red]Error during cleanup: {result}[/red]")
+            for result in results:
+                if isinstance(result, Exception) and not isinstance(result, asyncio.CancelledError):
+                    console.print(f"[red]Error during cleanup: {result}[/red]")
 
         # 🔹 Step 6: Kill all remaining threads and orphaned processes
         self.kill_all_threads()

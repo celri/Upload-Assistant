@@ -391,10 +391,16 @@ class UNIT3D:
             self.get_additional_data(meta),
             self.get_region_id(meta),
             self.get_distributor_id(meta),
+            return_exceptions=True,
         )
 
         merged: dict[str, str] = {}
         for r in results:
+            if isinstance(r, BaseException):
+                # A getter failed or was cancelled — log it but continue with partial data
+                if not isinstance(r, asyncio.CancelledError):
+                    console.print(f"[yellow]Warning: getter raised {type(r).__name__}: {r}[/yellow]")
+                continue
             merged.update(r)
 
         # Handle exclusive flag centrally for all UNIT3D trackers

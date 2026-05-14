@@ -365,7 +365,7 @@ async def disc_screenshots(
         one_disc = False
 
     if (not meta.get("tv_pack") and one_disc) or multi_screens == 0:
-        await cleanup_manager.cleanup()
+        await cleanup_manager.cleanup(cancel_tasks=False)
 
 
 async def capture_disc_task(
@@ -701,7 +701,7 @@ async def dvd_screenshots(meta: dict[str, Any], disc_num: int, num_screens: int 
         one_disc = False
 
     if (not meta.get("tv_pack") and one_disc) or multi_screens == 0:
-        await cleanup_manager.cleanup()
+        await cleanup_manager.cleanup(cancel_tasks=False)
 
 
 async def capture_dvd_screenshot(task: tuple[int, str, str, str, dict[str, Any], float, float, float, float]) -> tuple[int, Optional[str]]:
@@ -1013,20 +1013,16 @@ async def screenshots(
         cleanup_manager.reset_terminal()
         sys.exit(1)
     except asyncio.CancelledError:
-        await asyncio.sleep(0.1)
-        await kill_all_child_processes()
+        # Swallow cancellation and return empty — re-raising in Python 3.11+ causes
+        # CancelledError to propagate through asyncio.gather even with
+        # return_exceptions=True, which kills the entire upload run.
         gc.collect()
-        cleanup_manager.reset_terminal()
-        sys.exit(1)
+        return []
     except Exception:
-        await asyncio.sleep(0.1)
-        await kill_all_child_processes()
+        console.print(traceback.format_exc())
         gc.collect()
-        cleanup_manager.reset_terminal()
-        sys.exit(1)
+        return []
     finally:
-        await asyncio.sleep(0.1)
-        await kill_all_child_processes()
         if meta["debug"]:
             console.print("[yellow]All capture tasks finished. Cleaning up...[/yellow]")
 
@@ -1191,7 +1187,7 @@ async def screenshots(
         one_disc = False
 
     if (not meta.get("tv_pack") and one_disc) or multi_screens == 0:
-        await cleanup_manager.cleanup()
+        await cleanup_manager.cleanup(cancel_tasks=False)
 
     return valid_results if valid_results else None
 
