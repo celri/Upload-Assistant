@@ -2358,3 +2358,243 @@ class TestADFalsePositiveRegression:
         meta = _meta_base(edition='AD', resolution='1080p')
         slot = c._determine_c411_slot(meta)
         assert slot == 'AD|COMPAT-01'
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Notag — tag replacement in FrenchTrackerMixin.get_name()
+# ═══════════════════════════════════════════════════════════════
+
+
+class TestFrenchMixinNotagGetName:
+    """Tag replacement in FrenchTrackerMixin.get_name() (used by C411, NXM, etc.)."""
+
+    @pytest.fixture
+    def c411(self):
+        return C411(config=_config())
+
+    def _base_meta(self, **overrides):
+        m = {
+            "category": "MOVIE",
+            "type": "WEBDL",
+            "title": "Le Prenom",
+            "year": "2012",
+            "resolution": "1080p",
+            "source": "WEB",
+            "audio": "AC3",
+            "video_encode": "x264",
+            "service": "",
+            "edition": "",
+            "repack": "",
+            "3D": "",
+            "uhd": "",
+            "hdr": "",
+            "webdv": "",
+            "part": "",
+            "season": "",
+            "episode": "",
+            "is_disc": None,
+            "search_year": "",
+            "manual_year": None,
+            "manual_date": None,
+            "no_season": False,
+            "no_year": False,
+            "no_aka": False,
+            "debug": False,
+            "tv_pack": 0,
+            "imdb_info": {"aka": "", "original_language": "fr"},
+            "mediainfo": {},
+            "audio_languages": ["French"],
+            "subtitle_languages": [],
+        }
+        m.update(overrides)
+        return m
+
+    def test_valid_tag_unchanged(self, c411):
+        """A valid tag like '-Troxy' should remain as-is."""
+        meta = self._base_meta(tag="-Troxy")
+        result = _run_async(c411.get_name(meta))
+        assert result["name"].endswith("-Troxy")
+
+    def test_empty_tag_replaced(self, c411):
+        """Empty tag '' should be replaced with NOTAG."""
+        meta = self._base_meta(tag="")
+        result = _run_async(c411.get_name(meta))
+        assert result["name"].endswith("-NOTAG")
+
+    def test_dash_only_tag_replaced(self, c411):
+        """Tag '-' (dash only, empty group) should be replaced with NOTAG."""
+        meta = self._base_meta(tag="-")
+        result = _run_async(c411.get_name(meta))
+        assert result["name"].endswith("-NOTAG")
+
+    def test_nogrp_tag_replaced(self, c411):
+        """Tag '-NOGRP' should be replaced with NOTAG."""
+        meta = self._base_meta(tag="-NOGRP")
+        result = _run_async(c411.get_name(meta))
+        assert "-NOGRP" not in result["name"]
+        assert result["name"].endswith("-NOTAG")
+
+    def test_nogroup_tag_replaced(self, c411):
+        """Tag '-NOGROUP' should be replaced."""
+        meta = self._base_meta(tag="-NOGROUP")
+        result = _run_async(c411.get_name(meta))
+        assert "-NOGROUP" not in result["name"]
+        assert result["name"].endswith("-NOTAG")
+
+    def test_unknown_tag_replaced(self, c411):
+        """Tag '-Unknown' should be replaced."""
+        meta = self._base_meta(tag="-Unknown")
+        result = _run_async(c411.get_name(meta))
+        assert "-Unknown" not in result["name"]
+        assert result["name"].endswith("-NOTAG")
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Language requirement — get_additional_checks()
+# ═══════════════════════════════════════════════════════════════
+
+
+class TestFrenchLanguageCheck:
+    """French language requirement in FrenchTrackerMixin.get_additional_checks()."""
+
+    @pytest.fixture
+    def c411(self):
+        return C411(config=_config())
+
+    def test_french_audio_passes(self, c411):
+        meta = {
+            "audio_languages": ["French"],
+            "subtitle_languages": [],
+            "is_disc": None,
+            "debug": False,
+            "unattended": True,
+        }
+        with patch("src.trackers.COMMON.languages_manager") as mock_lm:
+            mock_lm.process_desc_language = AsyncMock()
+            assert _run_async(c411.get_additional_checks(meta)) is True
+
+    def test_french_subtitle_passes(self, c411):
+        meta = {
+            "audio_languages": ["English"],
+            "subtitle_languages": ["French"],
+            "is_disc": None,
+            "debug": False,
+            "unattended": True,
+        }
+        with patch("src.trackers.COMMON.languages_manager") as mock_lm:
+            mock_lm.process_desc_language = AsyncMock()
+            assert _run_async(c411.get_additional_checks(meta)) is True
+
+    def test_no_french_at_all_fails(self, c411):
+        meta = {
+            "audio_languages": ["English"],
+            "subtitle_languages": ["English"],
+            "is_disc": None,
+            "debug": False,
+            "unattended": True,
+        }
+        with patch("src.trackers.COMMON.languages_manager") as mock_lm:
+            mock_lm.process_desc_language = AsyncMock()
+            assert _run_async(c411.get_additional_checks(meta)) is False
+
+    def test_empty_audio_languages_with_french_subs(self, c411):
+        meta = {
+            "audio_languages": [],
+            "subtitle_languages": ["French"],
+            "is_disc": None,
+            "debug": False,
+            "unattended": True,
+        }
+        with patch("src.trackers.COMMON.languages_manager") as mock_lm:
+            mock_lm.process_desc_language = AsyncMock()
+            assert _run_async(c411.get_additional_checks(meta)) is True
+
+    def test_missing_audio_languages_key(self, c411):
+        meta = {
+            "subtitle_languages": ["French"],
+            "is_disc": None,
+            "debug": False,
+            "unattended": True,
+        }
+        with patch("src.trackers.COMMON.languages_manager") as mock_lm:
+            mock_lm.process_desc_language = AsyncMock()
+            assert _run_async(c411.get_additional_checks(meta)) is True
+
+    def test_missing_subtitle_languages_key(self, c411):
+        meta = {
+            "audio_languages": ["French"],
+            "is_disc": None,
+            "debug": False,
+            "unattended": True,
+        }
+        with patch("src.trackers.COMMON.languages_manager") as mock_lm:
+            mock_lm.process_desc_language = AsyncMock()
+            assert _run_async(c411.get_additional_checks(meta)) is True
+
+    def test_both_languages_missing_fails(self, c411):
+        meta = {
+            "is_disc": None,
+            "debug": False,
+            "unattended": True,
+        }
+        with patch("src.trackers.COMMON.languages_manager") as mock_lm:
+            mock_lm.process_desc_language = AsyncMock()
+            assert _run_async(c411.get_additional_checks(meta)) is False
+
+    def test_french_variant_fra_passes(self, c411):
+        meta = {
+            "audio_languages": ["fra"],
+            "subtitle_languages": [],
+            "is_disc": None,
+            "debug": False,
+            "unattended": True,
+        }
+        with patch("src.trackers.COMMON.languages_manager") as mock_lm:
+            mock_lm.process_desc_language = AsyncMock()
+            assert _run_async(c411.get_additional_checks(meta)) is True
+
+    def test_french_variant_fr_passes(self, c411):
+        meta = {
+            "audio_languages": ["fr"],
+            "subtitle_languages": [],
+            "is_disc": None,
+            "debug": False,
+            "unattended": True,
+        }
+        with patch("src.trackers.COMMON.languages_manager") as mock_lm:
+            mock_lm.process_desc_language = AsyncMock()
+            assert _run_async(c411.get_additional_checks(meta)) is True
+
+    def test_empty_both_lists_fails(self, c411):
+        meta = {
+            "audio_languages": [],
+            "subtitle_languages": [],
+            "is_disc": None,
+            "debug": False,
+            "unattended": True,
+        }
+        with patch("src.trackers.COMMON.languages_manager") as mock_lm:
+            mock_lm.process_desc_language = AsyncMock()
+            assert _run_async(c411.get_additional_checks(meta)) is False
+
+
+class TestC411SearchExistingLanguageGate:
+    """search_existing() skips C411 when no French audio/subtitle."""
+
+    def test_skips_when_no_french(self):
+        c411 = C411(config=_config())
+        meta = {
+            "audio_languages": ["English"],
+            "subtitle_languages": ["English"],
+            "is_disc": None,
+            "debug": False,
+            "unattended": True,
+            "tracker_status": {},
+            "skipping": None,
+            "imdb_id": "tt1234567",
+        }
+        with patch("src.trackers.COMMON.languages_manager") as mock_lm:
+            mock_lm.process_desc_language = AsyncMock()
+            dupes = _run_async(c411.search_existing(meta, ""))
+        assert dupes == []
+        assert meta["skipping"] == "C411"
