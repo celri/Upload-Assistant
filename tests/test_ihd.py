@@ -153,3 +153,33 @@ class TestIHDGetNameEdition:
             result = _run(ihd.get_name(meta))
         assert "RESTORED" not in result["name"]
         assert "JAPANESE 1080p" in result["name"]
+
+
+# ═══════════════════════════════════════════════════════════════
+#  get_name() — service token preservation (MGMP / MGM+)
+# ═══════════════════════════════════════════════════════════════
+
+
+class TestIHDGetNameService:
+    """IHD naming: service tokens such as MGMP must be preserved in the output name."""
+
+    @pytest.fixture
+    def ihd(self):
+        return IHD(config=_config())
+
+    def test_mgmp_preserved_in_webdl_name(self, ihd):
+        """Back to the Future (MGMP WEB-DL) must keep the MGMP service token."""
+        meta = {
+            "name": "Back to the Future 1985 1080p MGMP WEB-DL DD+ 5.1 H.264-PiRaTeS",
+            "resolution": "1080p",
+            "edition": "",
+            "is_disc": None,
+            "type": "WEBDL",
+            "language_checked": True,
+            "audio_languages": ["English"],
+        }
+        with patch("src.trackers.IHD.languages_manager") as mock_lm:
+            mock_lm.process_desc_language = AsyncMock()
+            mock_lm.has_english_language = AsyncMock(return_value=True)
+            result = _run(ihd.get_name(meta))
+        assert result["name"] == "Back to the Future 1985 1080p MGMP WEB-DL DD+ 5.1 H.264-PiRaTeS"

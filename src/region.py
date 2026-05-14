@@ -2056,6 +2056,7 @@ async def get_service(
         'W Network': 'WNET', 'WOW Presents Plus': 'WOWP', 'WOWP': 'WOWP', 'WWEN': 'WWEN', 'WWE Network': 'WWEN', 'XBOX': 'XBOX', 'Xbox Video': 'XBOX', 'XUMO': 'XUMO', 'YHOO': 'YHOO', 'Yahoo': 'YHOO',
         'YT': 'YT', 'ZDF': 'ZDF', 'iP': 'iP', 'BBC iPlayer': 'iP', 'iQIYI': 'iQIYI', 'iT': 'iT', 'iTunes': 'iT',
         'MGG': 'MGG', 'Megogo': 'MGG', 'MEGOGO': 'MGG', 'MeGoGo': 'MGG',
+        'MGMP': 'MGMP', 'MGM+': 'MGMP', 'MGMPlus': 'MGMP', 'MGM Plus': 'MGMP',
         'SWEET': 'SWEET',
         'KS': 'KS', 'Kyivstar': 'KS', 'KyivstarTV': 'KS', 'Kyivstar TV': 'KS', 'kyivstar': 'KS',
         'PKO': 'PKO', 'Planeta Kino Online': 'PKO',
