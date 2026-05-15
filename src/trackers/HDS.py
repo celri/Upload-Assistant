@@ -159,6 +159,7 @@ class HDS:
 
     async def search_existing(self, meta: Meta, _disctype: str) -> list[dict[str, Union[str, None]]]:
         dupes: list[dict[str, Union[str, None]]] = []
+        seen_links: set[str] = set()
 
         if str(meta.get("resolution", "")) not in ["2160p", "1080p", "1080i", "720p"]:
             console.print(f"{self.tracker}: The resolution must be at least 720p, skipping the upload...")
@@ -220,7 +221,8 @@ class HDS:
                                 size = txt
                                 break
 
-                    if name and torrent_link:
+                    if name and torrent_link and torrent_link not in seen_links:
+                        seen_links.add(torrent_link)
                         dupes.append({"name": name, "size": size, "link": torrent_link})
 
                 next_page = soup.find("a", href=re.compile(r"pages="), string=re.compile(r"Next|>>", re.I))
