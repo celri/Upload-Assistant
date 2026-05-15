@@ -514,8 +514,12 @@ class SeasonEpisodeManager:
             if source:
                 specs["Source"].setdefault(source, []).append(filename)
 
-            # Audio codec
-            audio = str(parsed.get("audio_codec", ""))
+            # Audio codec — parse only the technical suffix (from resolution onwards)
+            # to avoid misidentifying technical-sounding words in episode titles
+            # (e.g. "Lame" in "The House Full of Extremely Lame Horses" → MP3).
+            res_match = re.search(r"\b\d{3,4}[pi]\b", filename, re.IGNORECASE)
+            audio_source = filename[res_match.start() :] if res_match else filename
+            audio = str(_guessit_data(audio_source).get("audio_codec", ""))
             if audio:
                 specs["Audio Codec"].setdefault(audio, []).append(filename)
 
