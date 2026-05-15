@@ -1527,9 +1527,9 @@ class C411(FrenchTrackerMixin):
                                 if mi_append_to_nfo:
                                     async with aiofiles.open(mi_append_to_nfo, "rb") as f:
                                         mi_bytes = await f.read()
-                                    # If the NFO was rejected for being too large, send only the mediainfo
-                                    if "volumineux" in api_message.lower():
-                                        console.print("[yellow]C411 - NFO too large, retrying with mediainfo only[/yellow]")
+                                    # If the NFO was rejected for being too large or invalid, send only the mediainfo
+                                    if "volumineux" in api_message.lower() or "invalide" in api_message.lower():
+                                        console.print("[yellow]C411 - NFO rejected (too large or invalid), retrying with mediainfo only[/yellow]")
                                         nfo_bytes = mi_bytes
                                     else:
                                         console.print("[yellow]C411 - API can't use NFO to validate torrent, retrying with mediainfo appended[/yellow]")
