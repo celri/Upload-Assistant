@@ -314,7 +314,12 @@ async def process_trackers(
     elif discs and len(discs) > 1:
         one_disc = False
 
-    if (not meta.get("tv_pack") and one_disc) or multi_screens == 0:
+    filelist = cast(list[str], meta.get("filelist") or [])
+    # Use sequential processing when there are multiple video files (pack), regardless
+    # of whether tv_pack was correctly set — belt-and-suspenders guard.
+    has_multiple_files = len(filelist) > 1 or bool(meta.get("tv_pack"))
+
+    if (not has_multiple_files and one_disc) or multi_screens == 0:
         # Run all tracker tasks concurrently with individual error handling
         tasks: list[tuple[str, asyncio.Task[None]]] = []
         for tracker in enabled_trackers:

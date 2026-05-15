@@ -112,6 +112,9 @@ class SonarrManager:
         # Handle response from /api/v3/parse endpoint
         if isinstance(sonarr_data, dict) and "series" in sonarr_data:
             sonarr_dict = cast(Mapping[str, Any], sonarr_data)
+            # series is None when the show is not in the Sonarr library
+            if sonarr_dict["series"] is None:
+                return {"tvdb_id": None, "imdb_id": None, "tvmaze_id": None, "tmdb_id": None, "genres": [], "title": "", "year": None, "release_group": None}
             series = cast(Mapping[str, Any], sonarr_dict["series"])
             parsed_info = cast(Mapping[str, Any], sonarr_dict.get("parsedEpisodeInfo", {}))
             release_group = parsed_info.get("releaseGroup")

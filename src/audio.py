@@ -543,7 +543,14 @@ async def _get_audio_v2(
                                 console.print(f"DEBUG: Found original language audio track with variant: {audio_language}")
                             orig = True
 
-                        if audio_language and not audio_language.startswith(orig_lang) and not audio_language.startswith("en") and not audio_language.startswith("zx"):
+                        is_orig_variant = any(audio_language.startswith(var) for var in variants) and any(orig_lang.startswith(var) for var in variants)
+                        if (
+                            audio_language
+                            and not audio_language.startswith(orig_lang)
+                            and not audio_language.startswith("en")
+                            and not audio_language.startswith("zx")
+                            and not is_orig_variant
+                        ):
                             non_en_non_commentary = True
                             non_eng_non_orig_languages.append(audio_language)
 

@@ -503,3 +503,70 @@ class TestG3MiniIntegraleDupes:
         assert 'integrale_supersede' in result[0]['flags'], (
             "flag must be on the stored result object, not only on the local dupe"
         )
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Notag — tag replacement in G3MINI.get_name()
+# ═══════════════════════════════════════════════════════════════
+
+
+class TestG3MININotagGetName:
+    """Tag replacement in G3MINI.get_name()."""
+
+    @pytest.fixture
+    def g3mini(self):
+        return G3MINI(config=_config())
+
+    def _base_meta(self, **overrides):
+        m = {
+            "category": "MOVIE",
+            "type": "WEBDL",
+            "title": "Chainsaw Man",
+            "year": "2024",
+            "resolution": "1080p",
+            "source": "WEB",
+            "audio": "AAC",
+            "video_encode": "x264",
+            "video_codec": "",
+            "service": "",
+            "tag": "-GRP",
+            "edition": "",
+            "repack": "",
+            "3D": "",
+            "uhd": "",
+            "hdr": "",
+            "webdv": "",
+            "part": "",
+            "season": "",
+            "episode": "",
+            "is_disc": None,
+            "search_year": "",
+            "manual_year": None,
+            "manual_date": None,
+            "no_season": False,
+            "no_year": False,
+            "no_aka": False,
+            "debug": False,
+            "tv_pack": 0,
+            "imdb_info": {"aka": "", "original_language": "ja"},
+            "mediainfo": {},
+            "audio_languages": ["French"],
+            "subtitle_languages": [],
+        }
+        m.update(overrides)
+        return m
+
+    def test_valid_tag_unchanged(self, g3mini):
+        meta = self._base_meta(tag="-GRP")
+        result = asyncio.run(g3mini.get_name(meta))
+        assert result["name"].endswith("-GRP")
+
+    def test_empty_tag_uses_nogrp_label(self, g3mini):
+        meta = self._base_meta(tag="")
+        result = asyncio.run(g3mini.get_name(meta))
+        assert result["name"].endswith("-NoGrP")
+
+    def test_nogrp_tag_replaced(self, g3mini):
+        meta = self._base_meta(tag="-NoGrp")
+        result = asyncio.run(g3mini.get_name(meta))
+        assert result["name"].endswith("-NoGrP")

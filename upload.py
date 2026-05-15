@@ -750,30 +750,7 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> Optional[b
             # Ensure language info is available even if no tracker triggered language processing
             await languages_manager.process_desc_language(meta, tracker="")
 
-        # Auto-add trackers based on detected audio/subtitle languages
-        # Skip when trackers were explicitly set via -tk / --trackers
-        language_based_trackers = config.get("TRACKERS", {}).get("language_based_trackers", {})
-        if language_based_trackers and not meta.get("trackers_explicit", False):
-            detected_langs = set()
-            for lang in meta.get("audio_languages") or []:
-                detected_langs.add(lang.strip().lower())
-            for lang in meta.get("subtitle_languages") or []:
-                detected_langs.add(lang.strip().lower())
-
-            added_trackers: list[str] = []
-            for lang_key, tracker_csv in language_based_trackers.items():
-                if lang_key.strip().lower() in detected_langs:
-                    lang_trackers = [t.strip().upper() for t in tracker_csv.split(",") if t.strip()]
-                    for t in lang_trackers:
-                        if t in tracker_class_map and t not in meta["trackers"]:
-                            meta["trackers"].append(t)
-                            added_trackers.append(t)
-            if added_trackers:
-                trackers = meta["trackers"]
-                console.print(f"[green]Auto-added trackers based on detected languages: {', '.join(added_trackers)}[/green]")
-
         # Remove trackers already seeding in the user's client
-        # (runs after auto-add so language-based trackers are also checked)
         if "remove_trackers" in meta and meta["remove_trackers"]:
             removed: list[str] = []
             remove_trackers_list = (

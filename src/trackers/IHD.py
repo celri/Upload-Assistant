@@ -248,6 +248,11 @@ class IHD(UNIT3D):
         ihd_name = str(meta.get("name", ""))
         resolution = str(meta.get("resolution", ""))
 
+        # Edition is only kept for Full Disc (BDMV/DVD); strip it for all other types
+        edition = str(meta.get("edition", "") or "")
+        if edition and meta.get("is_disc") not in ("BDMV", "DVD"):
+            ihd_name = re.sub(r"\b" + re.escape(edition) + r"\b", " ", ihd_name, count=1).strip()
+
         if not meta.get("language_checked", False):
             await languages_manager.process_desc_language(meta, tracker=self.tracker)
         audio_languages_value = meta.get("audio_languages", [])

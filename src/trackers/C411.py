@@ -1522,12 +1522,18 @@ class C411(FrenchTrackerMixin):
                                     console.print(f"[red]C411 upload failed: HTTP {response.status_code}[/red]")
                                     if error_detail:
                                         console.print(f"[dim]{error_detail}[/dim]")
-                                console.print("[yellow]C411 - API can't use NFO to validate torrent - Will add mediainfo to our NFO and send it again")
                                 await asyncio.sleep(retry_delay)
                                 mi_append_to_nfo = await self._get_or_generate_mediainfo_as_nfo(meta)
                                 if mi_append_to_nfo:
                                     async with aiofiles.open(mi_append_to_nfo, "rb") as f:
-                                        nfo_bytes = nfo_bytes + b"\n" + await f.read()
+                                        mi_bytes = await f.read()
+                                    # If the NFO was rejected for being too large or invalid, send only the mediainfo
+                                    if "volumineux" in api_message.lower() or "invalide" in api_message.lower():
+                                        console.print("[yellow]C411 - NFO rejected (too large or invalid), retrying with mediainfo only[/yellow]")
+                                        nfo_bytes = mi_bytes
+                                    else:
+                                        console.print("[yellow]C411 - API can't use NFO to validate torrent, retrying with mediainfo appended[/yellow]")
+                                        nfo_bytes = nfo_bytes + b"\n" + mi_bytes
                                     # Patch "Complete name" in NFO to match the tracker release name
                                     if title and nfo_bytes:
                                         try:

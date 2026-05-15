@@ -698,3 +698,32 @@ class TestFrenchMixin:
     def test_fr_clean_strips_accents(self, gf):
         """GF _fr_clean uses unidecode to strip accents."""
         assert gf._fr_clean('Étoile résumé') == 'Etoile resume'
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Notag — tag replacement in GF.get_name()
+# ═══════════════════════════════════════════════════════════════
+
+
+class TestGFNotagGetName:
+    """Tag replacement in GF.get_name() (uses uuid-based name)."""
+
+    @pytest.fixture
+    def gf(self):
+        return GF(config=_config())
+
+    def test_valid_uuid_tag_unchanged(self, gf):
+        meta = {"uuid": "Movie.2024.1080p.WEB.x264-GRP.mkv", "tag": "-GRP"}
+        result = _run(gf.get_name(meta))
+        assert result["name"].endswith("-GRP")
+
+    def test_empty_tag_replaced(self, gf):
+        meta = {"uuid": "Movie.2024.1080p.WEB.x264.mkv", "tag": ""}
+        result = _run(gf.get_name(meta))
+        assert result["name"].endswith("-NoTag")
+
+    def test_nogrp_tag_replaced(self, gf):
+        meta = {"uuid": "Movie.2024.1080p.WEB.x264-NoGrp.mkv", "tag": "-NoGrp"}
+        result = _run(gf.get_name(meta))
+        assert "-NoGrp" not in result["name"]
+        assert result["name"].endswith("-NoTag")

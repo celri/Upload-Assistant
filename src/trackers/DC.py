@@ -219,25 +219,26 @@ class DC:
         if use_metadata_name:
             clean_name = meta.get("clean_name") or ""
             dc_name = scene_name if scene_name else clean_name
-            # T1)  Acceptable characters are as follows:
-            #         ABCDEFGHIJKLMNOPQRSTUVWXYZ
-            #         abcdefghijklmnopqrstuvwxyz
-            #         0123456789 . -
-            # https://scenerules.org/html/2014_BLURAY.html
-            dc_name = dc_name.replace("DD+", "DDP").replace("DTS:", "DTS-").replace("HDR10+", "HDR10P")
-            dc_name = unicodedata.normalize("NFD", dc_name)
-            dc_name = "".join(c for c in dc_name if c.isascii() and (c.isalnum() or c in (" ", ".", "-")))
-            if scene_name:
-                dc_name += " [UNRAR]"
-
         else:
             if scene_name:
-                dc_name = f"{scene_name} [UNRAR]"
+                dc_name = scene_name
             else:
                 dc_name = meta["uuid"]
                 base, ext = os.path.splitext(dc_name)
                 if ext.lower() in {".mkv", ".mp4", ".avi", ".ts"}:
                     dc_name = base
+
+        # T1)  Acceptable characters are as follows:
+        #         ABCDEFGHIJKLMNOPQRSTUVWXYZ
+        #         abcdefghijklmnopqrstuvwxyz
+        #         0123456789 . -
+        # https://scenerules.org/html/2014_BLURAY.html
+        dc_name = dc_name.replace("DD+", "DDP").replace("DTS:", "DTS-").replace("HDR10+", "HDR10P")
+        dc_name = unicodedata.normalize("NFD", dc_name)
+        dc_name = "".join(c for c in dc_name if c.isascii() and (c.isalnum() or c in (" ", ".", "-")))
+
+        if scene_name:
+            dc_name += " [UNRAR]"
 
         return dc_name
 

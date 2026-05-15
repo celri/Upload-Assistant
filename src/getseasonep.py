@@ -142,7 +142,7 @@ class SeasonEpisodeManager:
                 # if the mal id is set, then we've already run get_romaji in tmdb.py
                 if meta.get("mal_id") == 0 and meta["category"] == "TV":
                     parsed = _anitopy_parse(Path(video).name)
-                    romaji, mal_id, eng_title, seasonYear, anilist_episodes, meta["demographic"] = await self.tmdb_manager.get_romaji(
+                    romaji, mal_id, eng_title, seasonYear, anilist_episodes, meta["demographic"], anilist_id = await self.tmdb_manager.get_romaji(
                         str(parsed.get("anime_title", "")),
                         _safe_int(meta.get("mal_id", 0), 0),
                         meta,
@@ -150,6 +150,9 @@ class SeasonEpisodeManager:
                     mal_id_value = _safe_int(mal_id, 0)
                     if mal_id_value:
                         meta["mal_id"] = mal_id_value
+                    anilist_id_value = _safe_int(anilist_id, 0)
+                    if anilist_id_value:
+                        meta["anilist_id"] = anilist_id_value
                     anilist_episodes = _safe_int(anilist_episodes, 0)
                     if meta.get("tmdb_id") == 0:
                         year = str(parsed.get("anime_year", str(seasonYear)))
@@ -285,12 +288,34 @@ class SeasonEpisodeManager:
                             console.print(f"[bold yellow]If [green]{season}[/green] is incorrect, use --season to correct")
                             await asyncio.sleep(3)
                 else:
-                    console.print("[bold red]Error determining if TV show is anime or not[/bold red]")
-                    console.print("[bold yellow]Set manual season and episode[/bold yellow]")
-                    season_int = 1
-                    season = "S01"
-                    episode_int = 1
-                    episode = "E01"
+                    # Could not identify anime MAL ID; fall back to guessit-based detection
+                    console.print("[bold yellow]Could not find anime ID, falling back to standard season/episode detection[/bold yellow]")
+                    try:
+                        guess_data = _guessit_data(video)
+                        season_int = _safe_int(guess_data.get("season"), 1)
+                        season = f"S{str(season_int).zfill(2)}"
+                    except Exception:
+                        season_int = 1
+                        season = "S01"
+                    try:
+                        if len(filelist) == 1:
+                            guess_data = _guessit_data(video)
+                            episodes = guess_data.get("episode")
+                            if isinstance(episodes, list):
+                                episodes_list = cast(list[Any], episodes)
+                                episode_int = _safe_int(episodes_list[0], 0) if episodes_list else 0
+                                episode = "".join([f"E{str(_safe_int(item, 0)).zfill(2)}" for item in episodes_list])
+                            else:
+                                episode_int = _safe_int(episodes, 0)
+                                episode = "E" + str(episode_int).zfill(2) if episodes is not None else ""
+                        else:
+                            episode = ""
+                            episode_int = 0
+                            meta["tv_pack"] = 1
+                    except Exception:
+                        episode = ""
+                        episode_int = 0
+                        meta["tv_pack"] = 1
 
             if meta.get("manual_season", None) is None:
                 meta["season"] = season

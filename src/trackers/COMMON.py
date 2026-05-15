@@ -6,6 +6,7 @@ import os
 import re
 import secrets
 import sys
+import tempfile
 import unicodedata
 from typing import Any, Callable, Optional, Union, cast
 
@@ -22,6 +23,9 @@ from src.bbcode import BBCODE
 from src.console import console
 from src.exportmi import exportInfo
 from src.languages import languages_manager
+
+# Module-level lock to serialize concurrent writes to pack_image_links.json
+_pack_image_links_lock: asyncio.Lock = asyncio.Lock()
 
 
 class COMMON:
@@ -274,6 +278,10 @@ class COMMON:
         return info_hash
 
     async def save_image_links(self, meta: dict[str, Any], image_key: str, image_list: Optional[list[dict[str, str]]]) -> Optional[str]:
+        async with _pack_image_links_lock:
+            return await self._save_image_links_impl(meta, image_key, image_list)
+
+    async def _save_image_links_impl(self, meta: dict[str, Any], image_key: str, image_list: Optional[list[dict[str, str]]]) -> Optional[str]:
         if image_list is None:
             console.print("[yellow]No image links to save.[/yellow]")
             return None
@@ -343,8 +351,13 @@ class COMMON:
         existing_data["total_count"] = total
 
         try:
-            async with aiofiles.open(output_file, "w", encoding="utf-8") as f:
+            # Atomic write: write to a temp file then rename to prevent
+            # partial reads by concurrent tracker tasks
+            tmp_fd, tmp_path = tempfile.mkstemp(dir=output_dir, suffix=".tmp")
+            os.close(tmp_fd)
+            async with aiofiles.open(tmp_path, "w", encoding="utf-8") as f:
                 await f.write(json.dumps(existing_data, indent=2))
+            os.replace(tmp_path, output_file)
 
             if meta["debug"]:
                 console.print(f"[green]Saved {len(image_list)} new images for key '{image_key}' (total: {existing_data['total_count']}):[/green]")

@@ -126,7 +126,7 @@ class HDS:
                     desc_parts.append(f"[center]\n{screenshots_block}\n[/center]")
 
         # Signature
-        desc_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant][size=2]{meta.get('ua_signature', '')}[/size][/url][/center]")
+        desc_parts.append(f"[center][url=https://github.com/yippee0903/Upload-Assistant][size=2]{meta.get('ua_signature', '')}[/size][/url][/center]")
 
         description = "\n\n".join(part for part in desc_parts if part.strip())
 
@@ -159,6 +159,7 @@ class HDS:
 
     async def search_existing(self, meta: Meta, _disctype: str) -> list[dict[str, Union[str, None]]]:
         dupes: list[dict[str, Union[str, None]]] = []
+        seen_links: set[str] = set()
 
         if str(meta.get("resolution", "")) not in ["2160p", "1080p", "1080i", "720p"]:
             console.print(f"{self.tracker}: The resolution must be at least 720p, skipping the upload...")
@@ -205,10 +206,9 @@ class HDS:
                     name_tag = row.select_one('a[href*="page=torrent-details"]')
                     if not name_tag:
                         continue
-                    name = name_tag.get_text(strip=True)
-
-                    if not name and name_tag.has_attr("title"):
-                        name = str(name_tag["title"])
+                    # Prefer the title attribute — it holds the full torrent name,
+                    # whereas the link text may be truncated by the page layout.
+                    name = str(name_tag["title"]) if name_tag.has_attr("title") and name_tag["title"] else name_tag.get_text(strip=True)
                     href_value = name_tag.get("href", "")
                     link_path = str(href_value).lstrip("/")
                     torrent_link = f"{self.base_url.rstrip('/')}/{link_path}"
@@ -221,7 +221,8 @@ class HDS:
                                 size = txt
                                 break
 
-                    if name and torrent_link:
+                    if name and torrent_link and torrent_link not in seen_links:
+                        seen_links.add(torrent_link)
                         dupes.append({"name": name, "size": size, "link": torrent_link})
 
                 next_page = soup.find("a", href=re.compile(r"pages="), string=re.compile(r"Next|>>", re.I))
@@ -241,7 +242,6 @@ class HDS:
                 console.print(f"[bold red]Error searching for duplicates on page {current_page} of {self.tracker}: {e}[/bold red]")
                 break
 
-        console.print(f"[bold green]Found {len(dupes)} duplicates on {self.tracker}[/bold green]")
         return dupes
 
     async def get_category_id(self, meta: Meta) -> int:
