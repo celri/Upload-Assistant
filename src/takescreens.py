@@ -1016,10 +1016,12 @@ async def screenshots(
         # Swallow cancellation and return empty — re-raising in Python 3.11+ causes
         # CancelledError to propagate through asyncio.gather even with
         # return_exceptions=True, which kills the entire upload run.
+        await kill_all_child_processes()
         gc.collect()
         return []
     except Exception:
         console.print(traceback.format_exc())
+        await kill_all_child_processes()
         gc.collect()
         return []
     finally:

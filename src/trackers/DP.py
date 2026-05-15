@@ -165,8 +165,9 @@ class DP(UNIT3D):
         unique_languages: list[str] = []
         for lang in audio_languages_list:
             s = str(lang).strip()
-            if s and s not in seen:
-                seen.add(s)
+            s_lower = s.lower()
+            if s and s_lower not in seen:
+                seen.add(s_lower)
                 unique_languages.append(s)
 
         if not unique_languages:

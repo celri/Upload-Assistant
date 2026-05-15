@@ -715,7 +715,7 @@ class TestGFNotagGetName:
     def test_valid_uuid_tag_unchanged(self, gf):
         meta = {"uuid": "Movie.2024.1080p.WEB.x264-GRP.mkv", "tag": "-GRP"}
         result = _run(gf.get_name(meta))
-        assert "GRP" in result["name"]
+        assert result["name"].endswith("-GRP")
 
     def test_empty_tag_replaced(self, gf):
         meta = {"uuid": "Movie.2024.1080p.WEB.x264.mkv", "tag": ""}

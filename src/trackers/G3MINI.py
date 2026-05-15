@@ -144,6 +144,8 @@ class G3MINI(FrenchTrackerMixin, UNIT3D):
             for track in tracks:
                 if track.get("@type") == "Video":
                     encoding_settings = track.get("Encoded_Library_Settings", "") or ""
+                    if not isinstance(encoding_settings, str):
+                        encoding_settings = str(encoding_settings)
                     if not encoding_settings:
                         if meta.get("debug", False):
                             console.print(f"[yellow]{self.tracker}: No Encoded_Library_Settings found — skipping preset check.[/yellow]")

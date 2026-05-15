@@ -150,8 +150,9 @@ class SeasonEpisodeManager:
                     mal_id_value = _safe_int(mal_id, 0)
                     if mal_id_value:
                         meta["mal_id"] = mal_id_value
-                    if anilist_id:
-                        meta["anilist_id"] = int(anilist_id)
+                    anilist_id_value = _safe_int(anilist_id, 0)
+                    if anilist_id_value:
+                        meta["anilist_id"] = anilist_id_value
                     anilist_episodes = _safe_int(anilist_episodes, 0)
                     if meta.get("tmdb_id") == 0:
                         year = str(parsed.get("anime_year", str(seasonYear)))

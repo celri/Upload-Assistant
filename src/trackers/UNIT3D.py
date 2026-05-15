@@ -363,43 +363,48 @@ class UNIT3D:
         return {"sticky": "0"}
 
     async def get_data(self, meta: dict[str, Any]) -> dict[str, str]:
-        results = await asyncio.gather(
-            self.get_name(meta),
-            self.get_description(meta),
-            self.get_mediainfo(meta),
-            self.get_bdinfo(meta),
-            self.get_category_id(meta),
-            self.get_type_id(meta),
-            self.get_resolution_id(meta),
-            self.get_tmdb(meta),
-            self.get_imdb(meta),
-            self.get_tvdb(meta),
-            self.get_mal(meta),
-            self.get_igdb(meta),
-            self.get_anonymous(meta),
-            self.get_stream(meta),
-            self.get_sd(meta),
-            self.get_keywords(meta),
-            self.get_personal_release(meta),
-            self.get_internal(meta),
-            self.get_season_number(meta),
-            self.get_episode_number(meta),
-            self.get_featured(meta),
-            self.get_free(meta),
-            self.get_doubleup(meta),
-            self.get_sticky(meta),
-            self.get_additional_data(meta),
-            self.get_region_id(meta),
-            self.get_distributor_id(meta),
-            return_exceptions=True,
-        )
+        _REQUIRED_GETTERS = {"get_name", "get_category_id", "get_type_id", "get_resolution_id"}
+
+        getter_pairs: list[tuple[str, Any]] = [
+            ("get_name", self.get_name(meta)),
+            ("get_description", self.get_description(meta)),
+            ("get_mediainfo", self.get_mediainfo(meta)),
+            ("get_bdinfo", self.get_bdinfo(meta)),
+            ("get_category_id", self.get_category_id(meta)),
+            ("get_type_id", self.get_type_id(meta)),
+            ("get_resolution_id", self.get_resolution_id(meta)),
+            ("get_tmdb", self.get_tmdb(meta)),
+            ("get_imdb", self.get_imdb(meta)),
+            ("get_tvdb", self.get_tvdb(meta)),
+            ("get_mal", self.get_mal(meta)),
+            ("get_igdb", self.get_igdb(meta)),
+            ("get_anonymous", self.get_anonymous(meta)),
+            ("get_stream", self.get_stream(meta)),
+            ("get_sd", self.get_sd(meta)),
+            ("get_keywords", self.get_keywords(meta)),
+            ("get_personal_release", self.get_personal_release(meta)),
+            ("get_internal", self.get_internal(meta)),
+            ("get_season_number", self.get_season_number(meta)),
+            ("get_episode_number", self.get_episode_number(meta)),
+            ("get_featured", self.get_featured(meta)),
+            ("get_free", self.get_free(meta)),
+            ("get_doubleup", self.get_doubleup(meta)),
+            ("get_sticky", self.get_sticky(meta)),
+            ("get_additional_data", self.get_additional_data(meta)),
+            ("get_region_id", self.get_region_id(meta)),
+            ("get_distributor_id", self.get_distributor_id(meta)),
+        ]
+
+        results = await asyncio.gather(*[coro for _, coro in getter_pairs], return_exceptions=True)
 
         merged: dict[str, str] = {}
-        for r in results:
+        for (getter_name, _), r in zip(getter_pairs, results):
             if isinstance(r, BaseException):
-                # A getter failed or was cancelled — log it but continue with partial data
+                if getter_name in _REQUIRED_GETTERS:
+                    raise RuntimeError(f"Required getter {getter_name} failed: {r}") from r
+                # Optional getter — log and continue with partial data
                 if not isinstance(r, asyncio.CancelledError):
-                    console.print(f"[yellow]Warning: getter raised {type(r).__name__}: {r}[/yellow]")
+                    console.print(f"[yellow]Warning: getter {getter_name} raised {type(r).__name__}: {r}[/yellow]")
                 continue
             merged.update(r)
 
