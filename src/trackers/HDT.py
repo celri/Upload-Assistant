@@ -185,7 +185,7 @@ class HDT:
             desc_parts.append("[center]\n" + screenshots_block + "[/center]")
 
         # Signature
-        desc_parts.append(f"[right][url=https://github.com/Audionut/Upload-Assistant][size=1]{meta.get('ua_signature', '')}[/size][/url][/right]")
+        desc_parts.append(f"[right][url=https://github.com/yippee0903/Upload-Assistant][size=1]{meta.get('ua_signature', '')}[/size][/url][/right]")
 
         description = "\n\n".join(part for part in desc_parts if part.strip())
 

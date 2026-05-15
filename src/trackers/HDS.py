@@ -126,7 +126,7 @@ class HDS:
                     desc_parts.append(f"[center]\n{screenshots_block}\n[/center]")
 
         # Signature
-        desc_parts.append(f"[center][url=https://github.com/Audionut/Upload-Assistant][size=2]{meta.get('ua_signature', '')}[/size][/url][/center]")
+        desc_parts.append(f"[center][url=https://github.com/yippee0903/Upload-Assistant][size=2]{meta.get('ua_signature', '')}[/size][/url][/center]")
 
         description = "\n\n".join(part for part in desc_parts if part.strip())
 
