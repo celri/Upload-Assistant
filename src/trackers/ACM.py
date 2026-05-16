@@ -211,9 +211,20 @@ class ACM:
                         title = track.get("Title", "")
                         if isinstance(title, str) and "intertitles" in title.lower():
                             language = "en (Intertitles)"
+                    # Try exact match first, then fall back to the base language
+                    # tag so that BCP 47 regional codes (e.g. "en-US", "zh-Hans",
+                    # "pt-BR") are still recognised.
+                    found = False
                     for lang, subID in sub_lang_map.items():
                         if language in lang and subID not in sub_langs:
                             sub_langs.append(subID)
+                            found = True
+                    if not found and language and "-" in language:
+                        base_lang = language.split("-")[0]
+                        for lang, subID in sub_lang_map.items():
+                            if base_lang in lang and subID not in sub_langs:
+                                sub_langs.append(subID)
+                                break
         else:
             for language in meta["bdinfo"]["subtitles"]:
                 for lang, subID in sub_lang_map.items():

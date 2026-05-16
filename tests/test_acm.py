@@ -390,3 +390,159 @@ class TestGetName:
         assert "S02" in result
         # year should be gone for TV
         assert "2019" not in result
+
+
+# --------------------------------------------------------------------------- #
+# Helpers for real-file integration tests                                      #
+# --------------------------------------------------------------------------- #
+
+
+def _text_tracks(*langs: str) -> dict[str, Any]:
+    """Return a minimal mediainfo dict containing one Text track per language."""
+    return {"media": {"track": [{"@type": "Text", "Language": lang} for lang in langs]}}
+
+
+# --------------------------------------------------------------------------- #
+# get_subtitles – BCP 47 regional code handling                               #
+# --------------------------------------------------------------------------- #
+
+
+class TestGetSubtitles:
+    """Verify that BCP 47 regional language codes are recognised correctly."""
+
+    def test_en_us_recognised_as_english(self):
+        """'en-US' must map to 'Eng', not be silently dropped."""
+        acm = ACM(_config())
+        meta = _name_meta(
+            "Title 2011 1080p WEB-DL DD+ 2.0 H.264",
+            mediainfo=_text_tracks("en-US"),
+        )
+        subs = acm.get_subtitles(meta)
+        assert "Eng" in subs
+
+    def test_zh_hans_recognised_as_chinese(self):
+        """'zh-Hans' must map to 'Chi'."""
+        acm = ACM(_config())
+        meta = _name_meta(
+            "Title 2020 1080p WEB-DL AAC 2.0 H.264",
+            mediainfo=_text_tracks("zh-Hans"),
+        )
+        subs = acm.get_subtitles(meta)
+        assert "Chi" in subs
+
+    def test_es_es_recognised_as_spanish(self):
+        """'es-ES' must map to 'Spa'."""
+        acm = ACM(_config())
+        meta = _name_meta(
+            "Title 2020 1080p WEB-DL AAC 2.0 H.264",
+            mediainfo=_text_tracks("es-ES"),
+        )
+        subs = acm.get_subtitles(meta)
+        assert "Spa" in subs
+
+    def test_en_us_triggers_no_subs_tag_suppression(self):
+        """A release with only en-US subs must NOT get a [No subs] or [No Eng subs] tag."""
+        acm = ACM(_config())
+        subs = acm.get_subtitles(
+            _name_meta("T 2020 1080p WEB-DL AAC 2.0 H.264", mediainfo=_text_tracks("en-US"))
+        )
+        assert acm.get_subs_tag(subs) == ""
+
+
+# --------------------------------------------------------------------------- #
+# Real-file integration tests (name verified against ACM staff uploads)       #
+# --------------------------------------------------------------------------- #
+
+
+class TestGetNameRealFiles:
+    """End-to-end get_name() checks based on actual uploaded torrents.
+
+    Audio / subtitle data was gathered by running ``mediainfo --Output=JSON``
+    on the real files; the expected names were confirmed on the tracker.
+    """
+
+    def test_voice_s01_2160p_webdl(self):
+        """Voice S01 2160p WEB-DL – Korean series, no English subs."""
+        acm = ACM(_config())
+        # Real subs from mediainfo: zh zh en id th ms vi → has 'en' → no subs tag
+        meta = _name_meta(
+            "Voice 2017 S01 2160p WEB-DL AAC 2.0 H.265-FLTTH",
+            audio="AAC 2.0",
+            original_title="보이스",
+            title="Voice",
+            type="WEBDL",
+            category="TV",
+            year="2017",
+            season="S01",
+            mediainfo=_text_tracks("zh", "zh", "en", "id", "th", "ms", "vi"),
+        )
+        assert _run(acm.get_name(meta)) == "Voice / 보이스 S01 2160p WEB-DL AAC2.0 HEVC-FLTTH"
+
+    def test_atypical_family_s01_2160p_tving(self):
+        """The Atypical Family S01 2160p TVING WEB-DL – Korean series, English subs present."""
+        acm = ACM(_config())
+        # Real subs include 'en' among many others → has Eng → no subs tag
+        meta = _name_meta(
+            "The Atypical Family 2024 S01 2160p TVING WEB-DL AAC 2.0 H.265-PandaMoon",
+            audio="AAC 2.0",
+            original_title="히어로는 아닙니다만",
+            title="The Atypical Family",
+            type="WEBDL",
+            category="TV",
+            year="2024",
+            season="S01",
+            mediainfo=_text_tracks(
+                "ko", "ko", "ar", "cs", "da", "de", "el", "en",
+                "es-ES", "es", "fi", "fr", "he", "hr", "hu", "id",
+                "it", "ja", "ms", "nb", "nl", "pl", "pt-BR", "pt",
+                "ro", "ru", "sv", "th", "tr", "uk", "vi", "zh-Hans", "zh-Hant",
+            ),
+        )
+        assert (
+            _run(acm.get_name(meta))
+            == "The Atypical Family / 히어로는 아닙니다만 S01 2160p TVING WEB-DL AAC2.0 HEVC-PandaMoon"
+        )
+
+    def test_fangs_of_fortune_s01_1080p_iqiyi(self):
+        """Fangs of Fortune S01 1080p iQIYI WEB-DL – Chinese series, English subs present."""
+        acm = ACM(_config())
+        # Real subs include 'en' → no subs tag
+        meta = _name_meta(
+            "Fangs of Fortune 2024 S01 1080p iQIYI WEB-DL AAC 2.0 H.264-ANDY",
+            audio="AAC 2.0",
+            original_title="大梦归离",
+            title="Fangs of Fortune",
+            type="WEBDL",
+            category="TV",
+            year="2024",
+            season="S01",
+            mediainfo=_text_tracks("ar", "id", "ms", "en", "ja", "ko", "pt", "zh", "es", "th", "zh", "vi"),
+        )
+        assert (
+            _run(acm.get_name(meta))
+            == "Fangs of Fortune / 大梦归离 S01 1080p iQIYI WEB-DL AAC2.0 H.264-ANDY"
+        )
+
+    def test_hunter_x_hunter_s01_repack_1080p_cr(self):
+        """Hunter x Hunter S01 REPACK 1080p CR WEB-DL – en-US subs must count as English."""
+        acm = ACM(_config())
+        # Real subs: en-US (×2) + multi → with BCP-47 fix, 'en-US' → Eng → no subs tag
+        meta = _name_meta(
+            "Hunter x Hunter 2011 S01 REPACK 1080p CR WEB-DL DD+ 2.0 H.264-Kitsune",
+            audio="DD+ 2.0",
+            original_title="HUNTER×HUNTER",
+            title="Hunter x Hunter",
+            type="WEBDL",
+            category="TV",
+            year="2011",
+            season="S01",
+            mediainfo=_text_tracks(
+                "en-US", "en-US", "ar", "es-419", "es-ES", "fr", "it",
+                "ja", "ko", "pl", "pt-BR", "pt-PT", "ro", "ru-RU", "tr",
+                "uk", "zh-Hans", "zh-Hant",
+            ),
+        )
+        assert (
+            _run(acm.get_name(meta))
+            == "Hunter x Hunter / HUNTER×HUNTER S01 REPACK 1080p CR WEB-DL DD+2.0 H.264-Kitsune"
+        )
