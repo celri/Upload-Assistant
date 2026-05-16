@@ -3,11 +3,16 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import pytest
 
 from src.trackers.ACM import ACM
+
+
+def _run(coro):
+    return asyncio.run(coro)
 
 
 def _config() -> dict[str, Any]:
@@ -152,3 +157,236 @@ class TestCheckAsianOrigin:
         acm = ACM(_config())
         meta = _meta(origin_country=["", None], production_countries=[])
         assert acm.check_asian_origin(meta) is False
+
+
+def _name_meta(base_name: str, **overrides: Any) -> dict[str, Any]:
+    """Build a minimal meta dict for get_name() tests."""
+    m: dict[str, Any] = {
+        "name": base_name,
+        "aka": "",
+        "original_title": "",
+        "title": base_name.split()[0],
+        "audio": "",
+        "source": "",
+        "is_disc": None,
+        "type": "WEBDL",
+        "resolution": "1080p",
+        "hdr": "",
+        "category": "MOVIE",
+        "year": "2019",
+        "season": "",
+        "mediainfo": {"media": {"track": []}},
+        "bdinfo": None,
+    }
+    m.update(overrides)
+    return m
+
+
+class TestGetName:
+    """Verify ACM-specific naming transformations in get_name()."""
+
+    # ------------------------------------------------------------------ WEB-DL
+
+    def test_webdl_aac_no_space(self):
+        """AAC 2.0 → AAC2.0 for WEB-DL (stream = no space after audio codec)."""
+        acm = ACM(_config())
+        # UA base: "Title 1986 1080p WEB-DL AAC 2.0 H.264"
+        meta = _name_meta(
+            "Title 1986 1080p WEB-DL AAC 2.0 H.264",
+            audio="AAC 2.0",
+            type="WEBDL",
+        )
+        result = _run(acm.get_name(meta))
+        assert "AAC2.0" in result
+        assert "AAC 2.0" not in result
+
+    def test_webdl_ddplus_no_space(self):
+        """DD+ 5.1 → DD+5.1 for WEB-DL."""
+        acm = ACM(_config())
+        meta = _name_meta(
+            "Title 2019 2160p WEB-DL DD+ 5.1 DoVi HEVC",
+            audio="DD+ 5.1",
+            hdr="DoVi",
+            type="WEBDL",
+        )
+        result = _run(acm.get_name(meta))
+        assert "DD+5.1" in result
+        assert "DD+ 5.1" not in result
+
+    def test_webdl_dd_no_space(self):
+        """DD 5.1 → DD5.1 for streams (non-plus Dolby Digital)."""
+        acm = ACM(_config())
+        meta = _name_meta(
+            "Title 2001 480p WEB-DL DD 5.1 H.264",
+            audio="DD 5.1",
+            type="WEBDL",
+        )
+        result = _run(acm.get_name(meta))
+        assert "DD5.1" in result
+        assert "DD 5.1" not in result
+
+    def test_webdl_audio_before_video(self):
+        """Audio codec must stay BEFORE video codec for WEB-DL (ACM stream rule)."""
+        acm = ACM(_config())
+        # UA base name already has audio before video: "WEB-DL AAC 2.0 H.264"
+        meta = _name_meta(
+            "To Sleep So As To Dream 1986 1080p WEB-DL AAC 2.0 H.264",
+            audio="AAC 2.0",
+            type="WEBDL",
+        )
+        result = _run(acm.get_name(meta))
+        # Guide example: "1986 1080p WEB-DL AAC2.0 H.264"
+        assert result.index("AAC2.0") < result.index("H.264")
+
+    def test_webdl_audio_before_video_with_hdr(self):
+        """For WEB-DL with HDR: audio → HDR → video (ACM stream order)."""
+        acm = ACM(_config())
+        # UA base: "Title 2019 2160p WEB-DL DD+ 5.1 DoVi HEVC"
+        meta = _name_meta(
+            "Hunt Down 2019 2160p WEB-DL DD+ 5.1 DoVi HEVC",
+            audio="DD+ 5.1",
+            hdr="DoVi",
+            type="WEBDL",
+        )
+        result = _run(acm.get_name(meta))
+        # Guide example: "2019 2160p WEB-DL DD+5.1 DoVi HEVC"
+        assert result.index("DD+5.1") < result.index("DoVi") < result.index("HEVC")
+
+    def test_webdl_service_tag_preserved(self):
+        """Streaming service tag (NF) is preserved in output."""
+        acm = ACM(_config())
+        meta = _name_meta(
+            "The Ghost Bride S01 2160p NF WEB-DL DD+ 5.1 DoVi HDR HEVC",
+            audio="DD+ 5.1",
+            hdr="DoVi HDR",
+            type="WEBDL",
+            category="TV",
+            season="S01",
+            year="2020",
+        )
+        result = _run(acm.get_name(meta))
+        assert "NF" in result
+
+    # ------------------------------------------------------------------ HDTV
+
+    def test_hdtv_aac_no_space(self):
+        """AAC 5.1 → AAC5.1 for HDTV (stream)."""
+        acm = ACM(_config())
+        meta = _name_meta(
+            "Ramen Shop 2018 1080i HDTV AAC 5.1 H.264",
+            audio="AAC 5.1",
+            type="HDTV",
+        )
+        result = _run(acm.get_name(meta))
+        assert "AAC5.1" in result
+
+    def test_hdtv_dd_no_space(self):
+        """DD 5.1 → DD5.1 for HDTV (stream)."""
+        acm = ACM(_config())
+        meta = _name_meta(
+            "Loan Shark S01 1080i HDTV DD 5.1 H.264",
+            audio="DD 5.1",
+            type="HDTV",
+            category="TV",
+            season="S01",
+        )
+        result = _run(acm.get_name(meta))
+        assert "DD5.1" in result
+
+    # ------------------------------------------------------------------ REMUX
+
+    def test_remux_bluray_prefix_removed(self):
+        """'BluRay REMUX' → 'Remux' for remux releases."""
+        acm = ACM(_config())
+        meta = _name_meta(
+            "Oldboy 2003 2160p BluRay REMUX HEVC DTS-HD MA 5.1",
+            audio="DTS-HD MA 5.1",
+            type="REMUX",
+        )
+        result = _run(acm.get_name(meta))
+        assert "Remux" in result
+        assert "BluRay REMUX" not in result
+
+    def test_remux_uhd_bluray_prefix_removed(self):
+        """'UHD BluRay REMUX' → 'Remux' for UHD remux releases."""
+        acm = ACM(_config())
+        meta = _name_meta(
+            "Oldboy 2003 2160p UHD BluRay REMUX HEVC DTS-HD MA 5.1",
+            audio="DTS-HD MA 5.1",
+            type="REMUX",
+        )
+        result = _run(acm.get_name(meta))
+        assert "Remux" in result
+        assert "UHD BluRay REMUX" not in result
+
+    def test_remux_audio_has_space(self):
+        """Physical media (remux) keeps space after audio codec: 'DTS-HD MA 5.1'."""
+        acm = ACM(_config())
+        meta = _name_meta(
+            "Title 2019 1080p BluRay REMUX AVC TrueHD 5.1",
+            audio="TrueHD 5.1",
+            type="REMUX",
+        )
+        result = _run(acm.get_name(meta))
+        assert "TrueHD 5.1" in result
+
+    # ------------------------------------------------------------------ H.265 → HEVC
+
+    def test_h265_replaced_by_hevc(self):
+        """H.265 is always replaced by HEVC."""
+        acm = ACM(_config())
+        meta = _name_meta(
+            "Title 2019 2160p WEB-DL DD+ 5.1 H.265",
+            audio="DD+ 5.1",
+            type="WEBDL",
+        )
+        result = _run(acm.get_name(meta))
+        assert "HEVC" in result
+        assert "H.265" not in result
+
+    # ------------------------------------------------------------------ Atmos
+
+    def test_atmos_removed(self):
+        """' Atmos' suffix is stripped from the name."""
+        acm = ACM(_config())
+        meta = _name_meta(
+            "Title 2019 2160p WEB-DL DD+ 5.1 Atmos HEVC",
+            audio="DD+ 5.1 Atmos",
+            type="WEBDL",
+        )
+        result = _run(acm.get_name(meta))
+        assert "Atmos" not in result
+
+    # ------------------------------------------------------------------ Subtitle tags
+
+    def test_no_subs_tag_appended(self):
+        """[No subs] tag is appended when no subtitles are present."""
+        acm = ACM(_config())
+        meta = _name_meta(
+            "Oldboy 2003 2160p KOR UHD Blu-ray HEVC DTS-HD MA 5.1",
+            audio="DTS-HD MA 5.1",
+            type="DISC",
+            is_disc="BDMV",
+            bdinfo={"subtitles": []},
+        )
+        result = _run(acm.get_name(meta))
+        assert result.endswith("[No subs]")
+
+    # ------------------------------------------------------------------ TV season/year
+
+    def test_tv_year_removed(self):
+        """Year is removed from TV names; only season remains."""
+        acm = ACM(_config())
+        meta = _name_meta(
+            "Kingdom 2019 S02 2160p WEB-DL DD+ 5.1 HDR HEVC",
+            audio="DD+ 5.1",
+            hdr="HDR",
+            type="WEBDL",
+            category="TV",
+            season="S02",
+            year="2019",
+        )
+        result = _run(acm.get_name(meta))
+        assert "S02" in result
+        # year should be gone for TV
+        assert "2019" not in result
