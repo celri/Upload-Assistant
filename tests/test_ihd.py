@@ -93,6 +93,22 @@ class TestIHDGetNameEdition:
         assert "Extended" not in result["name"]
         assert "Some Film" in result["name"]
 
+    def test_multiword_edition_leaves_no_double_spaces(self, ihd):
+        """Stripping a multi-word edition (e.g. SPECIAL EDITION) must not leave double spaces."""
+        meta = {
+            "name": "Terminator 2: Judgment Day 1991 SPECIAL EDITION 1080p BluRay DD+ 5.1 x264-hallowed",
+            "resolution": "1080p",
+            "edition": "SPECIAL EDITION",
+            "is_disc": None,
+            "type": "ENCODE",
+            "language_checked": True,
+            "audio_languages": ["English"],
+        }
+        result = self._run_get_name(ihd, meta)
+        assert "SPECIAL EDITION" not in result["name"]
+        assert "  " not in result["name"], "double space found after edition removal"
+        assert "1991 1080p" in result["name"]
+
     def test_bdmv_keeps_edition(self, ihd):
         """Full Disc (BDMV) releases must keep their edition."""
         meta = {
