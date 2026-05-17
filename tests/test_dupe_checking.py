@@ -133,6 +133,29 @@ class TestFilenameMatchLogic:
             "from tracker file count (cross-seed would fail)"
         )
 
+    def test_tracker_files_with_folder_prefix_match_local_basename(self):
+        """
+        Regression: G3MINI stores files as "Folder/File.mkv".  The comparison
+        against local basenames must strip the directory component first.
+        """
+        local_file = "Atlanta.S04E01.MULTi.1080p.AMZN.WEB-DL.DDP5.1.H264-FRATERNiTY.mkv"
+        tracker_files = [
+            "Atlanta.S04E01.MULTi.1080p.AMZN.WEB-DL.DDP5.1.H264-FRATERNiTY/Atlanta.S04E01.MULTi.1080p.AMZN.WEB-DL.DDP5.1.H264-FRATERNiTY.mkv",
+            "Atlanta.S04E01.MULTi.1080p.AMZN.WEB-DL.DDP5.1.H264-FRATERNiTY/Atlanta.S04E01.MULTi.1080p.AMZN.WEB-DL.DDP5.1.H264-FRATERNiTY.nfo",
+        ]
+        meta = _base_meta(
+            filelist=[f"/downloads/Atlanta.S04E01.MULTi.1080p.AMZN.WEB-DL.DDP5.1.H264-FRATERNiTY/{local_file}"],
+        )
+        entry = _rf_entry(tracker_files)
+        entry["name"] = "Atlanta.S04.MULTi.VFF.1080p.WEB.DDP5.1.H.264-FRATERNiTY"
+
+        dupes = _run(_checker().filter_dupes([entry], meta, "G3MINI"))
+
+        assert dupes, "entry must remain in the dupe list"
+        assert meta.get("filename_match"), (
+            "filename_match must be set even when tracker stores 'Folder/File.mkv' paths"
+        )
+
     def test_no_filename_overlap_does_not_set_filename_match(self):
         """When no local filename appears in the tracker file list, no match flags are set."""
         tracker_files = [

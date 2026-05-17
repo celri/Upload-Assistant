@@ -205,12 +205,15 @@ class DupeChecker:
             sized = entry.get("size")  # This may come as a string, such as "1.5 GB"
 
             files_value = cast(list[Any], entry.get("files") or [])
-            files = [str(file) for file in files_value]
+            # Normalise to basename only: some trackers (e.g. G3MINI) store
+            # paths like "Folder/File.mkv" — strip the directory component so
+            # the comparison against local basenames works correctly.
+            files = [os.path.basename(str(file)) for file in files_value]
 
             # Handle case where files might be comma-separated strings in a list
             if files and len(files) == 1 and "," in files[0]:
                 # Split comma-separated string into individual filenames
-                files = [f.strip() for f in files[0].split(",")]
+                files = [os.path.basename(f.strip()) for f in files[0].split(",")]
 
             file_count_raw = entry.get("file_count", 0)
             file_count = coerce_int(file_count_raw) or 0
