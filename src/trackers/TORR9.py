@@ -1060,7 +1060,46 @@ class TORR9(FrenchTrackerMixin):
         if meta.get("debug"):
             console.print(f"[cyan]TORR9 dupe search found {len(dupes)} result(s)[/cyan]")
 
+        if dupes and token:
+            await self._enrich_with_files(dupes, token, debug=bool(meta.get("debug")))
+
         return await self._check_french_lang_dupes(dupes, meta)
+
+    async def _enrich_with_files(self, dupes: list[dict[str, Any]], token: str, *, debug: bool = False) -> None:
+        """Fetch file lists for each dupe entry via GET /api/v1/torrents/{id}/files.
+
+        Enriches each entry in-place with:
+          - ``files``      — list of file paths as returned by the API
+          - ``file_count`` — number of files (overrides any earlier value)
+
+        If the request fails or returns no usable data the entry is left
+        unchanged so the name-similarity fallback in DupeChecker can still
+        act as a safety net.
+        """
+        headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
+        async with httpx.AsyncClient(timeout=20.0, follow_redirects=True) as client:
+            for entry in dupes:
+                torrent_id = entry.get("id")
+                if not torrent_id:
+                    continue
+                try:
+                    r = await client.get(
+                        f"https://api.torr9.net/api/v1/torrents/{torrent_id}/files",
+                        headers=headers,
+                    )
+                    if r.status_code == 200:
+                        file_data = r.json()
+                        if isinstance(file_data, list):
+                            paths = [f["path"] for f in file_data if isinstance(f, dict) and "path" in f]
+                            entry["files"] = paths
+                            entry["file_count"] = len(paths)
+                            if debug:
+                                console.print(f"[cyan]TORR9 enriched {entry.get('name')!r} with {len(paths)} file(s)[/cyan]")
+                    elif debug:
+                        console.print(f"[yellow]TORR9 /files returned HTTP {r.status_code} for id={torrent_id}[/yellow]")
+                except Exception as exc:  # noqa: BLE001
+                    if debug:
+                        console.print(f"[yellow]TORR9 _enrich_with_files error for id={torrent_id}: {exc}[/yellow]")
 
     async def edit_desc(self, _meta: Meta) -> None:
         """No-op — TORR9 descriptions are built in upload()."""

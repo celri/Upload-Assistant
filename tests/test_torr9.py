@@ -915,6 +915,91 @@ class TestEditDesc:
         assert result is None
 
 
+# ─── _enrich_with_files ──────────────────────────────────────
+
+class TestEnrichWithFiles:
+    """_enrich_with_files fetches /api/v1/torrents/{id}/files and enriches dupe entries."""
+
+    def _mock_files_response(self, paths: list[str]) -> MagicMock:
+        resp = MagicMock()
+        resp.status_code = 200
+        resp.json.return_value = [{"path": p, "size": 1_000_000} for p in paths]
+        return resp
+
+    def test_enriches_files_and_file_count(self):
+        """Entry gains 'files' and 'file_count' from a successful /files call."""
+        t = TORR9(_config())
+        entry = {"name": "Atlanta.S04.MULTI.1080p.AMZN.H264.DDP5.1-FRATERNiTY", "id": 50343}
+        paths = [
+            "Atlanta.S04.MULTi.1080p.AMZN.WEB-DL.DDP5.1.H264-FRATERNiTY/Atlanta.S04E01.MULTi.1080p.AMZN.WEB-DL.DDP5.1.H264-FRATERNiTY/Atlanta.S04E01.MULTi.1080p.AMZN.WEB-DL.DDP5.1.H264-FRATERNiTY.mkv",
+            "Atlanta.S04.MULTi.1080p.AMZN.WEB-DL.DDP5.1.H264-FRATERNiTY/Atlanta.S04E01.MULTi.1080p.AMZN.WEB-DL.DDP5.1.H264-FRATERNiTY/Atlanta.S04E01.MULTi.1080p.AMZN.WEB-DL.DDP5.1.H264-FRATERNiTY.nfo",
+        ]
+        mock_resp = self._mock_files_response(paths)
+
+        with patch("httpx.AsyncClient") as MockClient:
+            client = AsyncMock()
+            client.get = AsyncMock(return_value=mock_resp)
+            client.__aenter__ = AsyncMock(return_value=client)
+            client.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value = client
+
+            _run(t._enrich_with_files([entry], "fake-token"))
+
+        assert entry["files"] == paths
+        assert entry["file_count"] == 2
+
+    def test_http_error_leaves_entry_unchanged(self):
+        """If the /files endpoint returns an error, the entry is left without 'files'."""
+        t = TORR9(_config())
+        entry = {"name": "Atlanta.S04.MULTI.1080p.AMZN.H264.DDP5.1-FRATERNiTY", "id": 50343}
+        mock_resp = MagicMock()
+        mock_resp.status_code = 404
+
+        with patch("httpx.AsyncClient") as MockClient:
+            client = AsyncMock()
+            client.get = AsyncMock(return_value=mock_resp)
+            client.__aenter__ = AsyncMock(return_value=client)
+            client.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value = client
+
+            _run(t._enrich_with_files([entry], "fake-token"))
+
+        assert "files" not in entry
+
+    def test_network_exception_leaves_entry_unchanged(self):
+        """A network error during enrichment leaves the entry untouched."""
+        t = TORR9(_config())
+        entry = {"name": "Some.Release.S01.1080p-GRP", "id": 99}
+
+        with patch("httpx.AsyncClient") as MockClient:
+            client = AsyncMock()
+            client.get = AsyncMock(side_effect=Exception("timeout"))
+            client.__aenter__ = AsyncMock(return_value=client)
+            client.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value = client
+
+            _run(t._enrich_with_files([entry], "fake-token"))
+
+        assert "files" not in entry
+
+    def test_entry_without_id_is_skipped(self):
+        """Entries with no 'id' are silently skipped — no HTTP call made."""
+        t = TORR9(_config())
+        entry = {"name": "No.Id.Release"}  # no "id" key
+
+        with patch("httpx.AsyncClient") as MockClient:
+            client = AsyncMock()
+            client.get = AsyncMock()
+            client.__aenter__ = AsyncMock(return_value=client)
+            client.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value = client
+
+            _run(t._enrich_with_files([entry], "fake-token"))
+
+        client.get.assert_not_called()
+        assert "files" not in entry
+
+
 # ─── Dupe relevance filtering ────────────────────────────────
 
 class TestDupeRelevanceFilter:
@@ -1070,8 +1155,9 @@ class TestDupeRelevanceFilter:
             dupes = _run(t.search_existing(meta, ''))
 
         assert len(dupes) == 1
-        # Should have been called only once (titles are identical → one query)
-        assert client_instance.get.call_count == 1
+        # 1 search query (deduplication avoids a second query for identical titles)
+        # + 1 _enrich_with_files call for id=200
+        assert client_instance.get.call_count == 2
 
     def test_bilingual_search_original_french_searches_fr_first(self):
         """When original_language is 'fr', the French title is searched first."""
