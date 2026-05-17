@@ -168,3 +168,86 @@ class TestFilenameMatchLogic:
         _run(_checker().filter_dupes([entry], meta, "RF"))
 
         assert not meta.get("filename_match"), "filename_match must not be set for a different release"
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Name-similarity fallback  (TORR9-style trackers with no files)
+# ═══════════════════════════════════════════════════════════════
+
+
+def _torr9_entry_no_files(**overrides) -> dict[str, Any]:
+    """Build a TORR9-style dupe entry with *no* file list."""
+    entry: dict[str, Any] = {
+        "name": "Atlanta.S04.MULTI.1080p.AMZN.H264.DDP5.1-FRATERNiTY",
+        "size": 20_000_000_000,
+        "link": "https://torr9.net/torrents/50343",
+        "id": 50343,
+        # No "files" key at all — TORR9 custom API never returns it
+    }
+    entry.update(overrides)
+    return entry
+
+
+def _atlanta_s04_meta(**overrides) -> dict[str, Any]:
+    """Meta for Atlanta S04 WEB season pack — FRATERNiTY group."""
+    meta: dict[str, Any] = {
+        "name": "Atlanta.S04.MULTI.VFF.1080p.AMZN.WEB.DDP.5.1.H264-FRATERNiTY",
+        "uuid": "Atlanta.S04.MULTI.VFF.1080p.AMZN.WEB.DDP.5.1.H264-FRATERNiTY",
+        "tmdb": "61818",
+        "resolution": "1080p",
+        "category": "TV",
+        "type": "WEBDL",
+        "source": "Amazon Prime",
+        "is_disc": None,
+        "sd": 0,
+        "hdr": None,
+        "season": "S04",
+        "episode": None,
+        "tag": "-FRATERNiTY",
+        "video_encode": "H.264",
+        "unattended": True,
+        "debug": False,
+        "filelist": ["/downloads/Atlanta.S04.MULTI.VFF.1080p.AMZN.WEB.DDP.5.1.H264-FRATERNiTY/Atlanta.S04E01.MULTi.VFF.mkv"],
+    }
+    meta.update(overrides)
+    return meta
+
+
+class TestNameSimilarityFallback:
+    """Name-similarity fallback for trackers that return no file lists (e.g. TORR9)."""
+
+    def test_same_group_high_similarity_sets_filename_match(self):
+        """
+        Regression — TORR9 Atlanta S04 FRATERNiTY:
+        Old naming omits VFF/WEB tokens. No file list is returned by the API.
+        The name-similarity fallback must detect this as the same release and
+        set filename_match (→ "Exact match found!" in the UI).
+        """
+        meta = _atlanta_s04_meta()
+        entry = _torr9_entry_no_files()
+
+        dupes = _run(_checker().filter_dupes([entry], meta, "TORR9"))
+
+        assert dupes, "entry must remain in the dupe list"
+        assert meta.get("filename_match"), (
+            "filename_match must be set via name-similarity fallback "
+            "when tracker returns no file list but names/tags are similar"
+        )
+
+    def test_same_group_low_similarity_does_not_set_filename_match(self):
+        """
+        Two releases by the same group but clearly different content (different show)
+        must NOT trigger filename_match even if the tag matches.
+        """
+        meta = _atlanta_s04_meta()
+        # Entry from a completely different show by the same group
+        entry = _torr9_entry_no_files(
+            name="Succession.S04.MULTI.1080p.AMZN.H264.DDP5.1-FRATERNiTY",
+        )
+
+        _run(_checker().filter_dupes([entry], meta, "TORR9"))
+
+        assert not meta.get("filename_match"), (
+            "filename_match must NOT be set when the names differ substantially "
+            "despite sharing the same release group"
+        )

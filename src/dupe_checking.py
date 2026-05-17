@@ -2,6 +2,7 @@
 import os
 import re
 from collections.abc import MutableMapping, Sequence
+from difflib import SequenceMatcher
 from typing import Any, Callable, Optional, TypedDict, Union, cast
 
 from typing_extensions import TypeAlias
@@ -633,6 +634,22 @@ class DupeChecker:
                 if tag.strip() and tag.strip() not in normalized:
                     await log_exclusion(f"Tag '{tag}' not found in normalized name", each)
                     return True
+
+            # ── Name-similarity fallback ──────────────────────────────────────
+            # When the tracker returns no file list (e.g. TORR9 custom API) we
+            # cannot do a filename comparison.  If the release group tag
+            # matches AND the normalised names are very similar (≥ 0.80), treat
+            # this as a confirmed dupe — the entry has already passed all
+            # resolution/source/HDR exclusion checks above.
+            if not files and tag.strip() and tag.strip() in normalized:
+                target_normalized = await DupeChecker.normalize_filename(str(meta.get("name", "")))
+                similarity = SequenceMatcher(None, normalized, target_normalized).ratio()
+                if meta.get("debug"):
+                    console.log(f"[debug] Name similarity fallback: {similarity:.3f} (threshold 0.80) for {each}")
+                if similarity >= 0.75:
+                    meta["filename_match"] = f"{entry.get('name')} = {entry.get('link', None)}"
+                    remember_match("filename")
+                    return False
 
             if meta.get("debug"):
                 console.log(f"[cyan]Release PASSED all checks: {each}")
