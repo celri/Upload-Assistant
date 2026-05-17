@@ -313,6 +313,18 @@ class DupeChecker:
                 if not supersede_dominated:
                     if meta.get("debug"):
                         console.log(f"[yellow]French language supersede — keeping as dupe: {each}")
+                    # If this also looks like an exact match (same group tag, high name
+                    # similarity), surface it as such so the UI shows "Exact match found!".
+                    # This handles trackers (e.g. C411) where _check_french_lang_dupes adds
+                    # french_lang_supersede because the upload's French audio wasn't detected,
+                    # yet the dupe is clearly the same release (identical group, ~same name).
+                    if not files and tag.strip() and tag.strip() in normalized:
+                        target_normalized = await DupeChecker.normalize_filename(str(meta.get("name", "")))
+                        similarity = SequenceMatcher(None, normalized, target_normalized).ratio()
+                        if meta.get("debug"):
+                            console.log(f"[debug] french_lang_supersede name-similarity: {similarity:.3f} for {each}")
+                        if similarity >= 0.75:
+                            meta["filename_match"] = f"{entry.get('name')} = {entry.get('link', None)}"
                     remember_match("french_lang_supersede")
                     return False
 

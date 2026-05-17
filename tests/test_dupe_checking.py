@@ -251,3 +251,89 @@ class TestNameSimilarityFallback:
             "filename_match must NOT be set when the names differ substantially "
             "despite sharing the same release group"
         )
+
+
+# ═══════════════════════════════════════════════════════════════
+#  french_lang_supersede + filename_match  (C411 Mandalorian regression)
+# ═══════════════════════════════════════════════════════════════
+
+
+class TestFrenchSupersedePlusFilenameMatch:
+    """Regression — C411 Mandalorian S03:
+    _check_french_lang_dupes adds french_lang_supersede when the upload's French
+    audio cannot be detected via _build_audio_string (e.g. mediainfo absent).
+    process_exclusion must still set filename_match via name-similarity when the
+    dupe is clearly the same release (same group, high name similarity).
+    """
+
+    def _mandalorian_meta(self, **overrides) -> dict[str, Any]:
+        meta: dict[str, Any] = {
+            "name": "The Mandalorian S03 MULTI VFF 1080p WEB DDP 5.1 H264-FTMVHD",
+            "uuid": "The.Mandalorian.S03.MULTI.VFF.1080p.WEB.DDP.5.1.H264-FTMVHD",
+            "tmdb": "82856",
+            "resolution": "1080p",
+            "category": "TV",
+            "type": "WEBDL",
+            "source": "WEB-DL",
+            "is_disc": None,
+            "sd": 0,
+            "hdr": None,
+            "season": "S03",
+            "episode": None,
+            "tag": "-FTMVHD",
+            "video_encode": "H.264",
+            "unattended": True,
+            "debug": False,
+            "filelist": [],
+        }
+        meta.update(overrides)
+        return meta
+
+    def _c411_supersede_entry(self, **overrides) -> dict[str, Any]:
+        entry: dict[str, Any] = {
+            "name": "[COMPAT-01] The.Mandalorian.S03.MULTI.VFF.1080p.WEB.EAC3.5.1.H264-FTMVHD",
+            "size": 12_000_000_000,
+            "link": "https://c411.org/torrents/ef79ff1455f54f94b93b1792e7c1af2ec8971671",
+            "id": "ef79ff1455f54f94b93b1792e7c1af2ec8971671",
+            "files": [],
+            "file_count": 0,
+            "flags": ["french_lang_supersede"],  # as added by _check_french_lang_dupes Case 2
+        }
+        entry.update(overrides)
+        return entry
+
+    def test_supersede_same_group_sets_filename_match(self):
+        """
+        When a dupe has french_lang_supersede AND is from the same group
+        (high name similarity), filename_match must still be set so the UI
+        shows "Exact match found!" instead of the generic dupe prompt.
+        """
+        meta = self._mandalorian_meta()
+        entry = self._c411_supersede_entry()
+
+        dupes = _run(_checker().filter_dupes([entry], meta, "C411"))
+
+        assert dupes, "supersede dupe must remain in the dupe list"
+        assert meta.get("filename_match"), (
+            "filename_match must be set even when french_lang_supersede is present "
+            "if the dupe is the same release (same group, high name similarity)"
+        )
+
+    def test_supersede_different_group_does_not_set_filename_match(self):
+        """
+        A dupe with french_lang_supersede from a DIFFERENT group must NOT
+        trigger filename_match — it is a genuinely superior competing release.
+        """
+        meta = self._mandalorian_meta()
+        entry = self._c411_supersede_entry(
+            name="[COMPAT-01] The.Mandalorian.S03.MULTI.VFF.1080p.WEB.EAC3.5.1.H264-BATEAU",
+            id="aabbccdd" * 5,
+            flags=["french_lang_supersede"],
+        )
+
+        _run(_checker().filter_dupes([entry], meta, "C411"))
+
+        assert not meta.get("filename_match"), (
+            "filename_match must NOT be set when the competing release has a "
+            "different group tag"
+        )
