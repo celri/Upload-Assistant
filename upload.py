@@ -483,6 +483,9 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> Optional[b
         console.print(traceback.format_exc())
         return
 
+    if meta.get("qbit_offline_abort"):
+        return False
+
     meta["emby_debug"] = meta.get("emby_debug") if meta.get("emby_debug", False) else config["DEFAULT"].get("emby_debug", False)
     if meta.get("emby_cat", None) == "movie" and meta.get("category", None) != "MOVIE":
         console.print(f"[red]Wrong category detected! Expected 'MOVIE', but found: {meta.get('category', None)}[/red]")
