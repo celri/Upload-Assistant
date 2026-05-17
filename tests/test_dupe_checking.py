@@ -1,0 +1,147 @@
+# Tests for DupeChecker.filter_dupes — filename match logic
+"""
+Regression tests for the dupe-detection behaviour in DupeChecker.filter_dupes:
+
+  • A filename match alone (without a matching file count) must be enough to:
+      1. Keep the entry as a dupe (process_exclusion returns False).
+      2. Set meta["filename_match"].
+  • When both filename AND count match, meta["file_count_match"] must also be set.
+  • Cross-seed detection (line 248 in uphelper.py) intentionally still requires
+    file_count_match, so we verify that flag is only present when counts agree.
+"""
+import asyncio
+from typing import Any
+
+import pytest
+
+from src.dupe_checking import DupeChecker
+
+
+def _run(coro):
+    return asyncio.run(coro)
+
+
+def _checker() -> DupeChecker:
+    return DupeChecker(config={})
+
+
+def _base_meta(**overrides) -> dict[str, Any]:
+    """Minimal meta dict for a 1080p BluRay encode (movie)."""
+    meta: dict[str, Any] = {
+        "name": "Interstellar 2014 IMAX 1080p BluRay DTS-HD MA 5.1 x264-LEGi0N",
+        "uuid": "Interstellar 2014 IMAX 1080p BluRay DTS-HD MA 5.1 x264-LEGi0N",
+        "tmdb": "157336",
+        "resolution": "1080p",
+        "category": "MOVIE",
+        "type": "ENCODE",
+        "source": "Blu-ray",
+        "is_disc": None,
+        "sd": 0,
+        "hdr": None,
+        "season": None,
+        "episode": None,
+        "tag": "-LEGi0N",
+        "video_encode": "x264",
+        "unattended": True,
+        "debug": False,
+        "filelist": ["/path/to/Interstellar.2014.IMAX.1080p.BluRay.DTS-HD.MA.5.1.x264-LEGi0N.mkv"],
+    }
+    meta.update(overrides)
+    return meta
+
+
+def _rf_entry(files: list[str], file_count: int | None = None) -> dict[str, Any]:
+    """Build a RF-style dupe entry with the given file list."""
+    if file_count is None:
+        file_count = len(files)
+    return {
+        "name": "Interstellar 2014 IMAX 1080p BluRay DTS-HD MA 5.1 x264-LEGi0N",
+        "size": 17_996_567_700,
+        "files": files,
+        "file_count": file_count,
+        "trumpable": False,
+        "link": "https://reelflix.cc/torrents/12725",
+        "download": "https://reelflix.cc/torrents/12725/download",
+        "id": 12725,
+        "type": "Encode",
+        "res": "1080p",
+        "internal": False,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════
+#  Filename match — with and without extra tracker files
+# ═══════════════════════════════════════════════════════════════
+
+
+class TestFilenameMatchLogic:
+    """filter_dupes behaviour around filename/file-count matching."""
+
+    def test_exact_filename_and_count_match_sets_both_flags(self):
+        """
+        When the tracker has exactly the same file list as the local copy,
+        both filename_match and file_count_match must be set.
+        """
+        local_file = "Interstellar.2014.IMAX.1080p.BluRay.DTS-HD.MA.5.1.x264-LEGi0N.mkv"
+        meta = _base_meta()
+        entry = _rf_entry([local_file])  # 1 file — same as local
+
+        dupes = _run(_checker().filter_dupes([entry], meta, "RF"))
+
+        assert dupes, "entry must remain in the dupe list"
+        assert meta.get("filename_match"), "filename_match must be set"
+        assert meta.get("file_count_match"), "file_count_match must be set when counts agree"
+
+    def test_filename_match_with_extra_tracker_files_sets_filename_match(self):
+        """
+        Regression: when the tracker torrent has extra files (NFO, sample) that
+        the local copy doesn't have, filename_match must still be set and the
+        entry must remain in the dupe list — even though file counts differ.
+        """
+        local_file = "Interstellar.2014.IMAX.1080p.BluRay.DTS-HD.MA.5.1.x264-LEGi0N.mkv"
+        tracker_files = [
+            local_file,
+            "Interstellar.2014.IMAX.1080p.BluRay.DTS-HD.MA.5.1.x264-LEGi0N.nfo",
+            "Interstellar.2014.IMAX.1080p.BluRay.DTS-HD.MA.5.1.x264-LEGi0N.sample.mkv",
+        ]
+        meta = _base_meta()
+        entry = _rf_entry(tracker_files)  # 3 files on tracker, 1 locally
+
+        dupes = _run(_checker().filter_dupes([entry], meta, "RF"))
+
+        assert dupes, "entry must remain in the dupe list"
+        assert meta.get("filename_match"), "filename_match must be set despite count mismatch"
+
+    def test_filename_match_with_extra_tracker_files_does_not_set_count_match(self):
+        """
+        file_count_match must NOT be set when the file counts differ — this
+        flag gates cross-seed eligibility, which requires an identical file set.
+        """
+        local_file = "Interstellar.2014.IMAX.1080p.BluRay.DTS-HD.MA.5.1.x264-LEGi0N.mkv"
+        tracker_files = [
+            local_file,
+            "Interstellar.2014.IMAX.1080p.BluRay.DTS-HD.MA.5.1.x264-LEGi0N.nfo",
+            "Interstellar.2014.IMAX.1080p.BluRay.DTS-HD.MA.5.1.x264-LEGi0N.sample.mkv",
+        ]
+        meta = _base_meta()
+        entry = _rf_entry(tracker_files)
+
+        _run(_checker().filter_dupes([entry], meta, "RF"))
+
+        assert not meta.get("file_count_match"), (
+            "file_count_match must NOT be set when local file count differs "
+            "from tracker file count (cross-seed would fail)"
+        )
+
+    def test_no_filename_overlap_does_not_set_filename_match(self):
+        """When no local filename appears in the tracker file list, no match flags are set."""
+        tracker_files = [
+            "Interstellar.2014.1080p.BluRay.DD.5.1.x264-BHDStudio.mkv",
+        ]
+        meta = _base_meta()
+        entry = _rf_entry(tracker_files)
+        entry["name"] = "Interstellar 2014 1080p BluRay DD 5.1 x264-BHDStudio"
+
+        _run(_checker().filter_dupes([entry], meta, "RF"))
+
+        assert not meta.get("filename_match"), "filename_match must not be set for a different release"

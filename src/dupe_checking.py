@@ -351,7 +351,10 @@ class DupeChecker:
                                 if meta.get("debug"):
                                     console.log(f"[debug] File count match found: {meta['file_count_match']}")
                                 remember_match("file_count")
-                                return False
+                            # A filename match is sufficient to confirm the same release even
+                            # when the tracker torrent includes extra files (NFO, sample, …)
+                            # that the local copy doesn't have.  Always stop here.
+                            return False
                 if tracker_name in ["BHD"]:
                     # BHD: compare sizes
                     entry_size = coerce_int(entry.get("size"))
