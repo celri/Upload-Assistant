@@ -32,7 +32,9 @@ def _run(coro):
 
 
 class TestIHDGetNameEdition:
-    """IHD naming guide: Edition is omitted for non-Full Disc types."""
+    """IHD naming guide: Edition (Remastered, Anniversary…) is omitted for
+    non-Full Disc types, but Cut (Director's Cut, Extended, Special Edition,
+    Theatrical, Unrated, IMAX, Open Matte) is always kept."""
 
     @pytest.fixture
     def ihd(self):
@@ -79,22 +81,40 @@ class TestIHDGetNameEdition:
         assert "Some Film" in result["name"]
 
     def test_remux_strips_edition(self, ihd):
-        """Edition must also be stripped for REMUX releases (non-Full Disc)."""
+        """Edition (Remastered) must be stripped for REMUX releases (non-Full Disc)."""
         meta = {
-            "name": "Some Film 2020 Extended 1080p BluRay REMUX DTS 5.1 AVC-GRP",
+            "name": "Some Film 2020 Remastered 1080p BluRay REMUX DTS 5.1 AVC-GRP",
             "resolution": "1080p",
-            "edition": "Extended",
+            "edition": "Remastered",
             "is_disc": None,
             "type": "REMUX",
             "language_checked": True,
             "audio_languages": ["English"],
         }
         result = self._run_get_name(ihd, meta)
-        assert "Extended" not in result["name"]
+        assert "Remastered" not in result["name"]
         assert "Some Film" in result["name"]
 
-    def test_multiword_edition_leaves_no_double_spaces(self, ihd):
-        """Stripping a multi-word edition (e.g. SPECIAL EDITION) must not leave double spaces."""
+    def test_multiword_edition_stripped_leaves_no_double_spaces(self, ihd):
+        """Stripping a multi-word Edition (e.g. 25TH ANNIVERSARY) must not leave double spaces."""
+        meta = {
+            "name": "Blade Runner 1982 25TH ANNIVERSARY 1080p BluRay DD+ 5.1 x264-GRP",
+            "resolution": "1080p",
+            "edition": "25TH ANNIVERSARY",
+            "is_disc": None,
+            "type": "ENCODE",
+            "language_checked": True,
+            "audio_languages": ["English"],
+        }
+        result = self._run_get_name(ihd, meta)
+        assert "25TH ANNIVERSARY" not in result["name"]
+        assert "  " not in result["name"], "double space found after edition removal"
+        assert "1982 1080p" in result["name"]
+
+    # ------------------------------------------------------------------ Cut preserved
+
+    def test_cut_special_edition_kept_for_encode(self, ihd):
+        """'Special Edition' is a Cut per IHD guide and must be kept for encodes."""
         meta = {
             "name": "Terminator 2: Judgment Day 1991 SPECIAL EDITION 1080p BluRay DD+ 5.1 x264-hallowed",
             "resolution": "1080p",
@@ -105,9 +125,35 @@ class TestIHDGetNameEdition:
             "audio_languages": ["English"],
         }
         result = self._run_get_name(ihd, meta)
-        assert "SPECIAL EDITION" not in result["name"]
-        assert "  " not in result["name"], "double space found after edition removal"
-        assert "1991 1080p" in result["name"]
+        assert "SPECIAL EDITION" in result["name"]
+
+    def test_cut_extended_kept_for_encode(self, ihd):
+        """'Extended' is a Cut per IHD guide and must be kept for encodes."""
+        meta = {
+            "name": "Some Film 2020 Extended 1080p BluRay REMUX DTS 5.1 AVC-GRP",
+            "resolution": "1080p",
+            "edition": "Extended",
+            "is_disc": None,
+            "type": "ENCODE",
+            "language_checked": True,
+            "audio_languages": ["English"],
+        }
+        result = self._run_get_name(ihd, meta)
+        assert "Extended" in result["name"]
+
+    def test_cut_directors_cut_kept_for_encode(self, ihd):
+        """'Director's Cut' is a Cut per IHD guide and must be kept for encodes."""
+        meta = {
+            "name": "Aliens 1986 DIRECTOR'S CUT 1080p BluRay DTS 5.1 x264-GRP",
+            "resolution": "1080p",
+            "edition": "DIRECTOR'S CUT",
+            "is_disc": None,
+            "type": "ENCODE",
+            "language_checked": True,
+            "audio_languages": ["English"],
+        }
+        result = self._run_get_name(ihd, meta)
+        assert "DIRECTOR'S CUT" in result["name"]
 
     def test_bdmv_keeps_edition(self, ihd):
         """Full Disc (BDMV) releases must keep their edition."""
