@@ -1,4 +1,5 @@
 # Upload Assistant © 2025 Audionut & wastaken7 — Licensed under UAPL v1.0
+import re
 from typing import Any, Optional
 
 from src.console import console
@@ -97,6 +98,15 @@ class LST(UNIT3D):
             else:
                 lst_name = lst_name.replace(str(meta.get("source", "")), f"{resolution}", 1)
                 lst_name = lst_name.replace(str(meta.get("video_codec", "")), f"{meta.get('audio', '')} {meta.get('video_codec', '')}", 1)
+
+        # For TV: only keep the year if TVDB itself has a year in the series name.
+        # e.g. TVDB "Shameless (2011)" → keep year; TVDB "Shameless" → strip year.
+        if meta.get("category") == "TV":
+            tvdb_series_name = str(meta.get("tvdb_series_name") or "")
+            tvdb_has_year = bool(re.search(r"\b(19|20)\d{2}\b", tvdb_series_name))
+            if not tvdb_has_year:
+                lst_name = re.sub(r"\s+\b(19|20)\d{2}\b", "", lst_name, count=1)
+                lst_name = re.sub(r"\s{2,}", " ", lst_name).strip()
 
         if meta.get("trump_reason") == "exact_match":
             lst_name = lst_name + " - TRUMP"
