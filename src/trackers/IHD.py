@@ -298,7 +298,7 @@ class IHD(UNIT3D):
 
         if meta.get("type") in ("WEBDL", "WEBRIP") and not meta.get("service", ""):
             if not meta["unattended"] or meta["debug"]:
-                console.print(f"[bold red]Source is missing, skipping {self.tracker} upload.[/bold red]")
+                console.print(f"[bold red]Service is missing, skipping {self.tracker} upload.[/bold red]")
             should_continue = False
 
         if meta["is_disc"] != "BDMV":

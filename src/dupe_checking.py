@@ -358,6 +358,7 @@ class DupeChecker:
                             console.log(f"[debug] Dupe files list: {files[:10]}{'...' if len(files) > 10 else files}")
                         if any(file.lower() == f.lower() for f in files):
                             meta["filename_match"] = f"{entry.get('name')} = {entry.get('link', None)}"
+                            meta["exact_filename_match"] = True
                             if meta.get("debug"):
                                 console.log(f"[debug] Filename match found: {meta['filename_match']}")
                             remember_match("filename")
@@ -421,12 +422,14 @@ class DupeChecker:
                 normalized_target = normalize_mtv_name(target_name)
                 if normalized_target == dupe_name:
                     meta["filename_match"] = f"{entry.get('name')} = {entry.get('link', None)}"
+                    meta["exact_filename_match"] = True
                     return False
 
             if tracker_name == "BHD":
                 target_name = str(meta.get("name", "")).replace("DD+", "DDP")
                 if str(entry.get("name")) == target_name:
                     meta["filename_match"] = f"{entry.get('name')} = {entry.get('link', None)}"
+                    meta["exact_filename_match"] = True
                     return False
 
             if tracker_name == "HUNO":
@@ -436,6 +439,7 @@ class DupeChecker:
                 huno_name = str(huno_name_map.get("name", huno_name_result)) if isinstance(huno_name_result, dict) else str(huno_name_result)
                 if str(entry.get("name")) == huno_name:
                     meta["filename_match"] = f"{entry.get('name')} = {entry.get('link', None)}"
+                    meta["exact_filename_match"] = True
                     return False
 
             if tracker_name in ["BHD", "MTV", "RTF", "AR"] and (
@@ -650,14 +654,14 @@ class DupeChecker:
             # ── Name-similarity fallback ──────────────────────────────────────
             # When the tracker returns no file list (e.g. TORR9 custom API) we
             # cannot do a filename comparison.  If the release group tag
-            # matches AND the normalised names are very similar (≥ 0.80), treat
+            # matches AND the normalised names are very similar (≥ 0.75), treat
             # this as a confirmed dupe — the entry has already passed all
             # resolution/source/HDR exclusion checks above.
             if not files and tag.strip() and tag.strip() in normalized:
                 target_normalized = await DupeChecker.normalize_filename(str(meta.get("name", "")))
                 similarity = SequenceMatcher(None, normalized, target_normalized).ratio()
                 if meta.get("debug"):
-                    console.log(f"[debug] Name similarity fallback: {similarity:.3f} (threshold 0.80) for {each}")
+                    console.log(f"[debug] Name similarity fallback: {similarity:.3f} (threshold 0.75) for {each}")
                 if similarity >= 0.75:
                     meta["filename_match"] = f"{entry.get('name')} = {entry.get('link', None)}"
                     remember_match("filename")

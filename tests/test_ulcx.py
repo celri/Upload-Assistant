@@ -98,7 +98,7 @@ class TestULCXAdditionalChecks:
             result = _run(ulcx.get_additional_checks(meta))
         assert result is False
         mock_console.print.assert_any_call(
-            f"[bold red]Source is missing, skipping {ulcx.tracker} upload.[/bold red]"
+            f"[bold red]Streaming service is missing, skipping {ulcx.tracker} upload.[/bold red]"
         )
 
     def test_unattended_webdl_missing_service_no_print(self, ulcx):
@@ -112,4 +112,4 @@ class TestULCXAdditionalChecks:
             result = _run(ulcx.get_additional_checks(meta))
         assert result is False
         for call in mock_console.print.call_args_list:
-            assert "Source is missing" not in str(call)
+            assert "Streaming service is missing" not in str(call)
