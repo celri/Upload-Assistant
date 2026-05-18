@@ -130,7 +130,7 @@ class UploadHelper:
                                 meta["were_trumping"] = True
                                 if not meta.get(f"{tracker_name}_trumpable_id"):
                                     meta[f"{tracker_name}_trumpable_id"] = meta.get(f"{tracker_name}_matched_id", None)
-                                if meta.get("filename_match", False) and meta.get("file_count_match", False):
+                                if meta.get("exact_filename_match", False):
                                     meta["trump_reason"] = "exact_match"
                                 else:
                                     meta["trump_reason"] = "trumpable_release"
@@ -152,7 +152,7 @@ class UploadHelper:
                             sys.exit(1)
 
                 if not meta.get("were_trumping", False):
-                    if meta.get("filename_match", False) and meta.get("file_count_match", False):
+                    if meta.get("filename_match", False):
                         console.print(f"[bold red]Exact match found! - {meta['filename_match']}[/bold red]")
                         try:
                             if tracker_name in ["AITHER", "LST"]:

@@ -13,6 +13,15 @@ from src.trackers.UNIT3D import UNIT3D
 Meta = dict[str, Any]
 Config = dict[str, Any]
 
+# Per IHD naming guide, the "Cut" element (Director's Cut, Extended,
+# Special Edition, Theatrical, Unrated, IMAX, Open Matte) is kept for
+# ALL release types.  Only the "Edition" element (Remastered, Anniversary
+# Edition, …) is omitted for non-Full Disc releases.
+_CUT_KEYWORDS = re.compile(
+    r"\b(?:cut|uncut|extended|theatrical|unrated|imax|open\s+matte|special\s+edition)\b",
+    re.IGNORECASE,
+)
+
 
 class IHD(UNIT3D):
     skip_nfo: bool = True
@@ -248,10 +257,14 @@ class IHD(UNIT3D):
         ihd_name = str(meta.get("name", ""))
         resolution = str(meta.get("resolution", ""))
 
-        # Edition is only kept for Full Disc (BDMV/DVD); strip it for all other types
+        # Per IHD naming guide: "Edition" (Remastered, Anniversary Edition, …)
+        # is omitted for non-Full Disc releases, but "Cut" (Director's Cut,
+        # Extended, Special Edition, Theatrical, Unrated, IMAX, Open Matte) is
+        # always kept.
         edition = str(meta.get("edition", "") or "")
-        if edition and meta.get("is_disc") not in ("BDMV", "DVD"):
-            ihd_name = re.sub(r"\b" + re.escape(edition) + r"\b", " ", ihd_name, count=1).strip()
+        if edition and meta.get("is_disc") not in ("BDMV", "DVD") and not _CUT_KEYWORDS.search(edition):
+            ihd_name = re.sub(r"\b" + re.escape(edition) + r"\b", "", ihd_name, count=1)
+            ihd_name = re.sub(r" +", " ", ihd_name).strip()
 
         if not meta.get("language_checked", False):
             await languages_manager.process_desc_language(meta, tracker=self.tracker)
@@ -283,9 +296,9 @@ class IHD(UNIT3D):
                 console.print(f"[bold red]No encoding settings in mediainfo, skipping {self.tracker} upload.[/bold red]")
             should_continue = False
 
-        if not meta.get("source", ""):
+        if meta.get("type") in ("WEBDL", "WEBRIP") and not meta.get("service", ""):
             if not meta["unattended"] or meta["debug"]:
-                console.print(f"[bold red]Source is missing, skipping {self.tracker} upload.[/bold red]")
+                console.print(f"[bold red]Service is missing, skipping {self.tracker} upload.[/bold red]")
             should_continue = False
 
         if meta["is_disc"] != "BDMV":

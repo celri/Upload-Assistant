@@ -496,34 +496,7 @@ class UNIT3D:
 
                         meta["tracker_status"][self.tracker]["torrent_id"] = torrent_id
 
-                        # Preserve NFO-patched torrent before download (tracker may serve version without NFO)
-                        nfo_torrent_backup = None
-                        if meta.get("keep_nfo"):
-                            nfo_path = f"{base}/[{self.tracker}].torrent"
-                            if os.path.exists(nfo_path):
-                                async with aiofiles.open(nfo_path, "rb") as f_nfo:
-                                    nfo_torrent_backup = await f_nfo.read()
-
                         await self.common.download_tracker_torrent(meta, self.tracker, headers=headers, downurl=response_data["data"])
-
-                        # Restore NFO-patched torrent if tracker-downloaded version stripped the NFO
-                        if nfo_torrent_backup:
-                            from torf import Torrent  # noqa: PLC0415
-
-                            downloaded_path = f"{base}/[{self.tracker}].torrent"
-                            needs_restore = False
-                            try:
-                                downloaded = Torrent.read(downloaded_path)
-                                needs_restore = not any(str(f).lower().endswith(".nfo") for f in downloaded.files)
-                            except Exception:
-                                pass  # Cannot parse downloaded torrent; keep as-is
-                            if needs_restore:
-                                try:
-                                    async with aiofiles.open(downloaded_path, "wb") as f_restore:
-                                        await f_restore.write(nfo_torrent_backup)
-                                    console.print(f"[cyan]{self.tracker}: Tracker torrent lacked NFO — restored NFO-patched version.[/cyan]")
-                                except Exception as write_err:
-                                    console.print(f"[yellow]{self.tracker}: Failed to restore NFO-patched torrent: {write_err}[/yellow]")
 
                         return True  # Success
 

@@ -211,9 +211,20 @@ class ACM:
                         title = track.get("Title", "")
                         if isinstance(title, str) and "intertitles" in title.lower():
                             language = "en (Intertitles)"
+                    # Try exact match first, then fall back to the base language
+                    # tag so that BCP 47 regional codes (e.g. "en-US", "zh-Hans",
+                    # "pt-BR") are still recognised.
+                    found = False
                     for lang, subID in sub_lang_map.items():
                         if language in lang and subID not in sub_langs:
                             sub_langs.append(subID)
+                            found = True
+                    if not found and language and "-" in language:
+                        base_lang = language.split("-")[0]
+                        for lang, subID in sub_lang_map.items():
+                            if base_lang in lang and subID not in sub_langs:
+                                sub_langs.append(subID)
+                                break
         else:
             for language in meta["bdinfo"]["subtitles"]:
                 for lang, subID in sub_lang_map.items():
@@ -483,9 +494,6 @@ class ACM:
         release_type: str = meta.get("type", "")
         subs = self.get_subtitles(meta)
         resolution: str = meta.get("resolution", "")
-        video_encode: str = meta.get("video_encode", "")
-        video_codec: str = meta.get("video_codec", "")
-        hdr: str = meta.get("hdr", "")
         category: str = meta.get("category", "")
         year: str = str(meta.get("year", ""))
         season: str = meta.get("season", "")
@@ -505,33 +513,17 @@ class ACM:
             # Pattern handles optional special characters before year
             name = re.sub(rf"(\u202A?)({re.escape(year)}) ({re.escape(season)})", r"\1\3", name)
 
-        # ACM naming convention: video_codec comes BEFORE audio_codec
-        # Base format is: ... WEB-DL {audio} {hdr} {video_encode}
-        # ACM wants:      ... WEB-DL {video_encode} {hdr} {audio}
+        # ACM stream naming: audio codec comes BEFORE video codec (already the case in UA base names).
+        # Only no-space fixups are needed for streams.
         is_stream = release_type in ("WEBDL", "WEBRIP", "HDTV", "ENCODE")
-        video_tag = video_encode if video_encode else video_codec
-        if is_stream and audio and video_tag:
-            # Find and swap audio/video order
-            # Current: "... WEB-DL AAC 2.0 HDR H.264-GROUP" or "... WEB-DL AAC 2.0 H.264-GROUP"
-            # Target:  "... WEB-DL H.264 HDR AAC2.0-GROUP" or "... WEB-DL H.264 AAC2.0-GROUP"
-            audio_stripped = audio.strip()
-            if hdr:
-                # Pattern: {audio} {hdr} {video}
-                old_pattern = f"{audio_stripped} {hdr} {video_tag}"
-                new_pattern = f"{video_tag} {hdr} {audio_stripped}"
-                name = name.replace(old_pattern, new_pattern)
-            else:
-                # Pattern: {audio} {video}
-                old_pattern = f"{audio_stripped} {video_tag}"
-                new_pattern = f"{video_tag} {audio_stripped}"
-                name = name.replace(old_pattern, new_pattern)
 
-        # ACM stream naming: no space after audio codec (AAC2.0, DD+5.1)
-        # ACM physical media: space after audio codec (AAC 2.0, DD 5.1)
+        # ACM stream naming: no space after audio codec (AAC2.0, DD+5.1, DD5.1)
+        # ACM physical media: space after audio codec (AAC 2.0, DD+ 5.1, DD 5.1)
         if is_stream:
             if "AAC" in audio:
                 name = name.replace(audio.strip().replace("  ", " "), audio.replace("AAC ", "AAC"))
             name = name.replace("DD+ ", "DD+")
+            name = name.replace("DD ", "DD")
 
         # Remux format: remove BluRay prefix
         name = name.replace("UHD BluRay REMUX", "Remux")

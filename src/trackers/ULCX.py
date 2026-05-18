@@ -147,6 +147,11 @@ class ULCX(UNIT3D):
             console.print(f"[bold red]Disc source(s) missing BD certificate, skipping {self.tracker} upload.[/bold red]")
             return False
 
+        if meta.get("type") in ("WEBDL", "WEBRIP") and not meta.get("service", ""):
+            if not meta["unattended"] or meta["debug"]:
+                console.print(f"[bold red]Streaming service is missing, skipping {self.tracker} upload.[/bold red]")
+            return False
+
         return should_continue
 
     async def get_additional_data(self, meta: Meta) -> dict[str, Any]:

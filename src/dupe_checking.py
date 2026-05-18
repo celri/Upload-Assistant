@@ -2,6 +2,7 @@
 import os
 import re
 from collections.abc import MutableMapping, Sequence
+from difflib import SequenceMatcher
 from typing import Any, Callable, Optional, TypedDict, Union, cast
 
 from typing_extensions import TypeAlias
@@ -205,12 +206,15 @@ class DupeChecker:
             sized = entry.get("size")  # This may come as a string, such as "1.5 GB"
 
             files_value = cast(list[Any], entry.get("files") or [])
-            files = [str(file) for file in files_value]
+            # Normalise to basename only: some trackers (e.g. G3MINI) store
+            # paths like "Folder/File.mkv" — strip the directory component so
+            # the comparison against local basenames works correctly.
+            files = [os.path.basename(str(file)) for file in files_value]
 
             # Handle case where files might be comma-separated strings in a list
             if files and len(files) == 1 and "," in files[0]:
                 # Split comma-separated string into individual filenames
-                files = [f.strip() for f in files[0].split(",")]
+                files = [os.path.basename(f.strip()) for f in files[0].split(",")]
 
             file_count_raw = entry.get("file_count", 0)
             file_count = coerce_int(file_count_raw) or 0
@@ -309,6 +313,18 @@ class DupeChecker:
                 if not supersede_dominated:
                     if meta.get("debug"):
                         console.log(f"[yellow]French language supersede — keeping as dupe: {each}")
+                    # If this also looks like an exact match (same group tag, high name
+                    # similarity), surface it as such so the UI shows "Exact match found!".
+                    # This handles trackers (e.g. C411) where _check_french_lang_dupes adds
+                    # french_lang_supersede because the upload's French audio wasn't detected,
+                    # yet the dupe is clearly the same release (identical group, ~same name).
+                    if not files and tag.strip() and tag.strip() in normalized:
+                        target_normalized = await DupeChecker.normalize_filename(str(meta.get("name", "")))
+                        similarity = SequenceMatcher(None, normalized, target_normalized).ratio()
+                        if meta.get("debug"):
+                            console.log(f"[debug] french_lang_supersede name-similarity: {similarity:.3f} for {each}")
+                        if similarity >= 0.75:
+                            meta["filename_match"] = f"{entry.get('name')} = {entry.get('link', None)}"
                     remember_match("french_lang_supersede")
                     return False
 
@@ -342,6 +358,7 @@ class DupeChecker:
                             console.log(f"[debug] Dupe files list: {files[:10]}{'...' if len(files) > 10 else files}")
                         if any(file.lower() == f.lower() for f in files):
                             meta["filename_match"] = f"{entry.get('name')} = {entry.get('link', None)}"
+                            meta["exact_filename_match"] = True
                             if meta.get("debug"):
                                 console.log(f"[debug] Filename match found: {meta['filename_match']}")
                             remember_match("filename")
@@ -351,7 +368,10 @@ class DupeChecker:
                                 if meta.get("debug"):
                                     console.log(f"[debug] File count match found: {meta['file_count_match']}")
                                 remember_match("file_count")
-                                return False
+                            # A filename match is sufficient to confirm the same release even
+                            # when the tracker torrent includes extra files (NFO, sample, …)
+                            # that the local copy doesn't have.  Always stop here.
+                            return False
                 if tracker_name in ["BHD"]:
                     # BHD: compare sizes
                     entry_size = coerce_int(entry.get("size"))
@@ -402,12 +422,14 @@ class DupeChecker:
                 normalized_target = normalize_mtv_name(target_name)
                 if normalized_target == dupe_name:
                     meta["filename_match"] = f"{entry.get('name')} = {entry.get('link', None)}"
+                    meta["exact_filename_match"] = True
                     return False
 
             if tracker_name == "BHD":
                 target_name = str(meta.get("name", "")).replace("DD+", "DDP")
                 if str(entry.get("name")) == target_name:
                     meta["filename_match"] = f"{entry.get('name')} = {entry.get('link', None)}"
+                    meta["exact_filename_match"] = True
                     return False
 
             if tracker_name == "HUNO":
@@ -417,6 +439,7 @@ class DupeChecker:
                 huno_name = str(huno_name_map.get("name", huno_name_result)) if isinstance(huno_name_result, dict) else str(huno_name_result)
                 if str(entry.get("name")) == huno_name:
                     meta["filename_match"] = f"{entry.get('name')} = {entry.get('link', None)}"
+                    meta["exact_filename_match"] = True
                     return False
 
             if tracker_name in ["BHD", "MTV", "RTF", "AR"] and (
@@ -627,6 +650,22 @@ class DupeChecker:
                 if tag.strip() and tag.strip() not in normalized:
                     await log_exclusion(f"Tag '{tag}' not found in normalized name", each)
                     return True
+
+            # ── Name-similarity fallback ──────────────────────────────────────
+            # When the tracker returns no file list (e.g. TORR9 custom API) we
+            # cannot do a filename comparison.  If the release group tag
+            # matches AND the normalised names are very similar (≥ 0.75), treat
+            # this as a confirmed dupe — the entry has already passed all
+            # resolution/source/HDR exclusion checks above.
+            if not files and tag.strip() and tag.strip() in normalized:
+                target_normalized = await DupeChecker.normalize_filename(str(meta.get("name", "")))
+                similarity = SequenceMatcher(None, normalized, target_normalized).ratio()
+                if meta.get("debug"):
+                    console.log(f"[debug] Name similarity fallback: {similarity:.3f} (threshold 0.75) for {each}")
+                if similarity >= 0.75:
+                    meta["filename_match"] = f"{entry.get('name')} = {entry.get('link', None)}"
+                    remember_match("filename")
+                    return False
 
             if meta.get("debug"):
                 console.log(f"[cyan]Release PASSED all checks: {each}")

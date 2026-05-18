@@ -53,6 +53,7 @@ def _base_ulcx_meta(**overrides: Any) -> dict[str, Any]:
         "video_codec": "H.264",
         "resolution": "1080p",
         "type": "WEBDL",
+        "service": "NF",
         "is_disc": False,
         "valid_mi_settings": True,
         "personalrelease": False,
