@@ -183,7 +183,10 @@ class TrackerStatusManager:
                                 meta[first_pass_dupes_key] = normalized_dupes
 
                             # Show bloat warning before dupe prompt so user can make informed decision
-                            if tracker_name in meta.get("bloated_trackers", []):
+                            if tracker_name in local_meta.get("bloated_trackers", []):
+                                if local_meta.get("unattended", False) and not local_meta.get("unattended_confirm", False):
+                                    local_tracker_status["skipped"] = True
+                                    return tracker_name, local_tracker_status
                                 console.print(f"[bold red]⚠ Warning: This release may be considered bloated on {tracker_name}[/bold red]")
 
                             # Run dupe check first so it can modify local_meta (e.g., set cross-seed values)
