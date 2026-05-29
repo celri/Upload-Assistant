@@ -1996,7 +1996,9 @@ async def set_tmdb_metadata(meta: dict[str, Any], filename: Optional[str] = None
                     mal_manual=meta.get("mal_manual"),
                     aka=meta.get("aka", ""),
                     original_language=meta.get("original_language"),
-                    poster=meta.get("poster"),
+                    # In edit mode, always pass poster=None so the correct poster for
+                    # the (possibly corrected) tmdb_id is fetched fresh from the API.
+                    poster=None if meta.get("edit", False) else meta.get("poster"),
                     debug=meta.get("debug", False),
                     mode=meta.get("mode", "cli"),
                     tvdb_id=meta.get("tvdb_id", 0),
@@ -2090,8 +2092,9 @@ async def get_tmdb_localized_data(meta: dict[str, Any], data_type: str, language
                 console.print(f"[red]Error reading localized data file {filename}: {e}[/red]")
                 localized_data = {}
 
-        # Re-check if we have cached data for this specific language and data_type
-        cached_result: dict[str, Any] = localized_data.get(language, {}).get(data_type, {})
+        # Re-check if we have cached data for this specific language, data_type and tmdb id
+        tmdb_id_str = str(meta.get("tmdb", ""))
+        cached_result: dict[str, Any] = localized_data.get(language, {}).get(data_type, {}).get(tmdb_id_str, {})
         if cached_result:
             return cached_result
 
@@ -2102,8 +2105,8 @@ async def get_tmdb_localized_data(meta: dict[str, Any], data_type: str, language
                 if response.status_code == 200:
                     tmdb_data = response.json()
 
-                    # Merge the fetched data into existing cache
-                    localized_data.setdefault(language, {})[data_type] = tmdb_data
+                    # Merge the fetched data into existing cache (keyed by tmdb_id)
+                    localized_data.setdefault(language, {}).setdefault(data_type, {})[tmdb_id_str] = tmdb_data
 
                     # Attempt to write to disk, but don't fail if write errors occur
                     try:
