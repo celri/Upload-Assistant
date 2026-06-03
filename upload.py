@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import filecmp
 import gc
+import glob
 import json
 import os
 import platform
@@ -501,6 +502,28 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> Optional[b
         await nfo_link_manager.nfo_link(meta)
         meta["we_are_uploading"] = False
         return
+
+    # Warn when the release appears to have ONLY Audio Description tracks.
+    # AD tracks are accessibility-only audio for visually impaired viewers;
+    # uploading them as if they were the main audio is almost always wrong.
+    if meta.get("ad_only_audio", False):
+        console.print("[bold yellow]⚠  WARNING: This release appears to contain ONLY Audio Description (AD) audio.[/bold yellow]")
+        console.print("[yellow]AD tracks are accessibility audio for visually impaired viewers — not the main programme audio.[/yellow]")
+        if meta.get("unattended", False):
+            console.print("[yellow]Unattended mode: skipping upload (AD-only audio).[/yellow]")
+            meta["we_are_uploading"] = False
+            return
+        try:
+            ad_confirm = cli_ui.ask_yes_no("Proceed with AD-only audio upload?", default=False)
+        except EOFError:
+            console.print("\n[red]Exiting on user request (Ctrl+C)[/red]")
+            await cleanup_manager.cleanup()
+            cleanup_manager.reset_terminal()
+            sys.exit(1)
+        if not ad_confirm:
+            console.print("[red]Upload cancelled due to AD-only audio.[/red]")
+            meta["we_are_uploading"] = False
+            return
 
     parser = Args(config)
     helper = UploadHelper(config)
@@ -1273,7 +1296,30 @@ async def process_meta(meta: Meta, base_dir: str, bot: Any = None) -> Optional[b
                 if not has_nfo:
                     # Check if there actually are NFO files on disk
                     content_path = str(meta.get("path", ""))
-                    nfo_on_disk = any(f.lower().endswith(".nfo") for f in os.listdir(content_path)) if os.path.isdir(content_path) else False
+                    if os.path.isdir(content_path):
+                        # Case-insensitive post-filter mirrors determine_keep_nfo().
+                        _top_nfo = [p for p in glob.glob(os.path.join(content_path, "*")) if os.path.basename(p).lower().endswith(".nfo")]
+                        _rec_nfo = (
+                            [p for p in glob.glob(os.path.join(content_path, "**", "*"), recursive=True) if os.path.basename(p).lower().endswith(".nfo")]
+                            if not _top_nfo
+                            else []
+                        )
+                        nfo_on_disk = bool(_top_nfo or _rec_nfo)
+                    else:
+                        # Single-file upload: check for a sidecar NFO with the
+                        # same stem, case-insensitively (catches .NFO / .Nfo).
+                        _stem = os.path.splitext(content_path)[0]
+                        _base_stem = os.path.basename(_stem)
+                        _sib_dir = os.path.dirname(content_path)
+                        nfo_on_disk = (
+                            any(
+                                os.path.splitext(f)[0] == _base_stem and os.path.splitext(f)[1].lower() == ".nfo"
+                                for f in os.listdir(_sib_dir)
+                                if os.path.isfile(os.path.join(_sib_dir, f))
+                            )
+                            if os.path.isdir(_sib_dir)
+                            else False
+                        )
                     if nfo_on_disk:
                         console.print("[yellow]BASE.torrent is missing NFO files required by --keep-nfo. Removing stale torrent...[/yellow]")
                         os.remove(torrent_path)
