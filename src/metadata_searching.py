@@ -26,12 +26,13 @@ def _apply_tvdb_series_metadata(meta: dict[str, Any], episodes_data: Any, series
         meta["tvdb_series_name"] = series_name
     if isinstance(episodes_data, dict):
         series_title = episodes_data.get("series_title")
-        if series_title and not meta.get("tvdb_series_name"):
-            meta["tvdb_series_name"] = series_title
         series_year = episodes_data.get("series_year")
-        if isinstance(series_year, (str, int)) and re.fullmatch(r"19\d\d|20[0-3]\d", str(series_year)):
-            meta["tvdb_series_year"] = str(series_year)
-            meta["search_year"] = str(series_year)
+        valid_year = str(series_year) if isinstance(series_year, (str, int)) and re.fullmatch(r"19\d\d|20[0-3]\d", str(series_year)) else None
+        if series_title and not meta.get("tvdb_series_name"):
+            meta["tvdb_series_name"] = f"{series_title} ({valid_year})" if valid_year else series_title
+        if valid_year:
+            meta["tvdb_series_year"] = valid_year
+            meta["search_year"] = valid_year
 
 
 class MetadataSearchingManager:

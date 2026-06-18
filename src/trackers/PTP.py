@@ -566,6 +566,7 @@ class PTP:
                     meta.pop("imghost", None)
                 else:
                     meta["imghost"] = original_imghost
+                poster_path.unlink(missing_ok=True)
 
             if uploaded_images:
                 uploaded_url = uploaded_images[0].get("raw_url") or uploaded_images[0].get("img_url")

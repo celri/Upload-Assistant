@@ -112,12 +112,13 @@ def _series_translation_metadata(
     english_aliases = translation_aliases + extended_eng_aliases
     fallback_title = translation_aliases[-1] if translation_aliases else _pick_eng_alias(aliases, debug=debug)
     title = translation_name or fallback_title
-    year = None
-    for alias in english_aliases:
-        year = _extract_year_from_text(alias)
-        if year:
-            break
-    if not english_aliases:
+    year = _extract_year_from_text(title)
+    if not year:
+        for alias in english_aliases:
+            year = _extract_year_from_text(alias)
+            if year:
+                break
+    if not year and not english_aliases:
         year = _best_effort_series_year(_series_info)
 
     if debug and title:

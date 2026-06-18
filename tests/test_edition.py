@@ -102,6 +102,31 @@ class TestSpecialEditionIMDB:
         edition, _repack, _hybrid = _run(get_edition(video, None, [video], '', meta))
         assert edition == 'SPECIAL EDITION'
 
+    def test_sole_imdb_edition_ignored(self) -> None:
+        """When edition_count == 1 the sole IMDB edition must be skipped
+        (upstream imdb_edition_count > 1 guard) and the guessit path used."""
+        meta = _meta_base(
+            imdb_info={
+                'edition_count': 1,
+                'edition_details': {
+                    '120_0': {
+                        'seconds': 7200,
+                        'attributes': ['special', 'edition'],
+                    },
+                },
+            },
+            mediainfo={
+                'media': {
+                    'track': [
+                        {'@type': 'General', 'Duration': '7200'},
+                    ],
+                },
+            },
+        )
+        video = 'Aliens.1986.2160p.UHD.BluRay.TrueHD.7.1.DoVi.HDR10.x265-W4NK3R.mkv'
+        edition, _repack, _hybrid = _run(get_edition(video, None, [video], '', meta))
+        assert edition != 'SPECIAL EDITION'
+
 
 # ─── Extended Edition — must still normalise to 'EXTENDED' ───
 
