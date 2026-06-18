@@ -75,9 +75,14 @@ class TestSpecialEditionIMDB:
     the edition must resolve to 'SPECIAL EDITION'."""
 
     def test_imdb_special_edition_preserved(self) -> None:
-        """Simulate IMDB duration match returning 'Special Edition'."""
+        """Simulate IMDB duration match returning 'Special Edition'.
+
+        edition_count is set to 2 (theatrical + special) so the upstream
+        imdb_edition_count > 1 guard does not skip the IMDB path.
+        """
         meta = _meta_base(
             imdb_info={
+                'edition_count': 2,
                 'edition_details': {
                     'v1': {
                         'seconds': 7200,

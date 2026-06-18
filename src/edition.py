@@ -346,6 +346,12 @@ async def get_edition(video: str, bdinfo: Optional[dict[str, Any]], filelist: li
 
     edition = edition.replace(",", " ")
 
+    # Expand bare "Special" to "Special Edition" — guessit and the generic
+    # "edition" word cleanup both strip the word, but "Special" alone is
+    # incomplete in release naming ("Extended" works alone, "Special" does not).
+    if edition and edition.lower().strip() == "special":
+        edition = "Special Edition"
+
     # Handle repack info
     repack = ""
     if "REPACK" in (video.upper() or edition.upper()) or "V2" in video:
@@ -371,11 +377,17 @@ async def get_edition(video: str, bdinfo: Optional[dict[str, Any]], filelist: li
         edition = re.sub(r"(\bREPACK\d?\b|\bRERIP\b|\bPROPER\b)", "", edition, flags=re.IGNORECASE).strip()
 
     if not meta.get("webdv", False):
-        hybrid = False
+        hybrid = ""
         if "HYBRID" in video.upper() or "HYBRID" in edition.upper():
-            hybrid = True
+            hybrid = "Hybrid"
+        elif "CUSTOM" in video.upper() or "CUSTOM" in edition.upper():
+            hybrid = "Custom"
     else:
-        hybrid = meta.get("webdv", False)
+        hybrid = "Hybrid"
+
+    # Strip Hybrid/Custom from edition — they are carried by the hybrid flag
+    if hybrid:
+        edition = re.sub(r"\b(?:Hybrid|Custom)\b", "", edition, flags=re.IGNORECASE).strip()
 
     # Handle distributor info
     if edition:
@@ -394,7 +406,11 @@ async def get_edition(video: str, bdinfo: Optional[dict[str, Any]], filelist: li
                 edition = edition.replace("  ", " ")
 
         if edition != "":
-            edition = edition.strip()
+            if not manual_edition:
+                edition = re.sub(r"\b(19|20)\d{2}\b", "", edition).strip()
+                while "  " in edition:
+                    edition = edition.replace("  ", " ")
+            edition = edition.strip().upper()
             if meta["debug"]:
                 console.print(f"Final Edition: {edition}")
 
