@@ -517,7 +517,8 @@ class TOS(FrenchTrackerMixin, UNIT3D):
                 tracks = meta.get("mediainfo", {}).get("media", {}).get("track", [])
                 video_track = next((t for t in tracks if t.get("@type") == "Video"), None)
                 if video_track is None:
-                    console.print(f"[bold red]Could not determine video bitrate from mediainfo for {self.tracker} upload.[/bold red]")
+                    if not meta.get("unattended", False):
+                        console.print(f"[bold red]Could not determine video bitrate from mediainfo for {self.tracker} upload.[/bold red]")
                     bitrate_error = True
                 else:
                     raw_br = video_track.get("BitRate")
@@ -527,12 +528,14 @@ class TOS(FrenchTrackerMixin, UNIT3D):
                         bit_rate_kbps = None
 
                     if bit_rate_kbps is None:
-                        console.print(f"[bold red]Could not determine video bitrate from mediainfo for {self.tracker} upload.[/bold red]")
+                        if not meta.get("unattended", False):
+                            console.print(f"[bold red]Could not determine video bitrate from mediainfo for {self.tracker} upload.[/bold red]")
                         bitrate_error = True
                     elif bit_rate_kbps < min_kbps:
                         label = f"{codec_key} (anime)" if is_anime else codec_key
-                        console.print(f"[bold red]{self.tracker}: Video bitrate too low: {bit_rate_kbps:.0f} kbps for {label}.[/bold red]")
-                        console.print(f"[bold yellow]Must be >= {min_kbps} kbps for {resolution}.[/bold yellow]")
+                        if not meta.get("unattended", False):
+                            console.print(f"[bold red]{self.tracker}: Video bitrate too low: {bit_rate_kbps:.0f} kbps for {label}.[/bold red]")
+                            console.print(f"[bold yellow]Must be >= {min_kbps} kbps for {resolution}.[/bold yellow]")
                         bitrate_error = True
 
         if bitrate_error:
