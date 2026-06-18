@@ -27,86 +27,23 @@ class NBL:
     def __init__(self, config: Config) -> None:
         self.config: Config = config
         self.common = COMMON(config)
-        self.tracker = "NBL"
-        self.source_flag = "NBL"
-        self.upload_url = "https://nebulance.io/api.php"
-        self.search_url = "https://nebulance.io/api.php"
-        self.torrent_url = "https://nebulance.io/torrents.php?id="
-        self.api_key = str(self.config["TRACKERS"][self.tracker]["api_key"]).strip()
-        self.banned_groups = [
-            "0neshot",
-            "3LTON",
-            "4yEo",
-            "[Oj]",
-            "AFG",
-            "AkihitoSubs",
-            "AniHLS",
-            "Anime Time",
-            "AnimeRG",
-            "AniURL",
-            "ASW",
-            "BakedFish",
-            "bonkai77",
-            "Cleo",
-            "DeadFish",
-            "DeeJayAhmed",
-            "ELiTE",
-            "EMBER",
-            "eSc",
-            "EVO",
-            "FGT",
-            "FUM",
-            "GERMini",
-            "HAiKU",
-            "Hi10",
-            "ION10",
-            "JacobSwaggedUp",
-            "JIVE",
-            "Judas",
-            "LOAD",
-            "MeGusta",
-            "Mr.Deadpool",
-            "mSD",
-            "NemDiggers",
-            "neoHEVC",
-            "NhaNc3",
-            "NOIVTC",
-            "PlaySD",
-            "playXD",
-            "project-gxs",
-            "PSA",
-            "QaS",
-            "Ranger",
-            "RAPiDCOWS",
-            "Raze",
-            "Reaktor",
-            "REsuRRecTioN",
-            "RMTeam",
-            "ROBOTS",
-            "SpaceFish",
-            "SPASM",
-            "SSA",
-            "Telly",
-            "Tenrai-Sensei",
-            "TM",
-            "Trix",
-            "URANiME",
-            "VipapkStudios",
-            "ViSiON",
-            "Wardevil",
-            "xRed",
-            "XS",
-            "YakuboEncodes",
-            "YuiSubs",
-            "ZKBL",
-            "ZmN",
-            "ZMNT",
-        ]
+        self.tracker = 'NBL'
+        self.source_flag = 'NBL'
+        self.upload_url = 'https://nebulance.io/api.php'
+        self.search_url = 'https://nebulance.io/api.php'
+        self.torrent_url = 'https://nebulance.io/torrents.php?id='
+        self.api_key = str(self.config['TRACKERS'][self.tracker]['api_key']).strip()
+        self.banned_groups = ['0neshot', '3LTON', '4yEo', '[Oj]', 'AFG', 'AkihitoSubs', 'AniHLS', 'Anime Time', 'AnimeRG', 'AniURL', 'ASW', 'BakedFish',
+                              'bonkai77', 'Cleo', 'DeadFish', 'DeeJayAhmed', 'ELiTE', 'EMBER', 'eSc', 'EVO', 'FGT', 'FUM', 'GERMini', 'HAiKU', 'Hi10', 'ION10',
+                              'JacobSwaggedUp', 'JIVE', 'Judas', 'LOAD', 'MeGusta', 'Mr.Deadpool', 'mSD', 'NemDiggers', 'neoHEVC', 'NhaNc3', 'NOIVTC',
+                              'PlaySD', 'playXD', 'project-gxs', 'PSA', 'QaS', 'Ranger', 'RAPiDCOWS', 'Raze', 'Reaktor', 'REsuRRecTioN', 'RMTeam', 'ROBOTS',
+                              'SpaceFish', 'SPASM', 'SSA', 'Telly', 'Tenrai-Sensei', 'TM', 'Trix', 'URANiME', 'VipapkStudios', 'ViSiON', 'Wardevil', 'xRed',
+                              'XS', 'YakuboEncodes', 'YuiSubs', 'ZKBL', 'ZmN', 'ZMNT']
 
         pass
 
     async def get_cat_id(self, meta: Meta) -> int:
-        cat_id = 3 if meta.get("tv_pack", 0) == 1 else 1
+        cat_id = 3 if meta.get('tv_pack', 0) == 1 else 1
         return cat_id
 
     async def edit_desc(self, _meta: Meta) -> None:
@@ -116,95 +53,100 @@ class NBL:
     async def upload(self, meta: Meta, _disctype: str) -> bool:
         await self.common.create_torrent_for_upload(meta, self.tracker, self.source_flag)
 
-        if meta["bdinfo"] is not None:
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding="utf-8") as f:
+        if meta['bdinfo'] is not None:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/BD_SUMMARY_00.txt", encoding='utf-8') as f:
                 mi_dump = await f.read()
         else:
-            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", encoding="utf-8") as f:
+            async with aiofiles.open(f"{meta['base_dir']}/tmp/{meta['uuid']}/MEDIAINFO.txt", encoding='utf-8') as f:
                 mi_dump = await f.read()
         torrent_file_path = f"{meta['base_dir']}/tmp/{meta['uuid']}/[{self.tracker}].torrent"
-        async with aiofiles.open(torrent_file_path, "rb") as f:
+        async with aiofiles.open(torrent_file_path, 'rb') as f:
             torrent_bytes = await f.read()
-        files: dict[str, tuple[str, bytes, str]] = {"file_input": ("torrent.torrent", torrent_bytes, "application/x-bittorrent")}
+        files: dict[str, tuple[str, bytes, str]] = {
+            'file_input': ('torrent.torrent', torrent_bytes, 'application/x-bittorrent')
+        }
         data: dict[str, Any] = {
-            "action": "upload",
-            "api_key": self.api_key,
-            "tvmazeid": int(meta.get("tvmaze_id", 0)),
-            "mediainfo": mi_dump,
-            "category": await self.get_cat_id(meta),
-            "ignoredupes": "on",
+            'action': 'upload',
+            'api_key': self.api_key,
+            'tvmazeid': int(meta.get('tvmaze_id', 0)),
+            'mediainfo': mi_dump,
+            'category': await self.get_cat_id(meta),
+            'ignoredupes': '1'
         }
 
         try:
-            if not meta["debug"]:
+            if not meta['debug']:
                 async with httpx.AsyncClient(timeout=30) as client:
                     response = await client.post(url=self.upload_url, files=files, data=data)
                     if response.status_code in [200, 201]:
                         try:
                             response_data = response.json()
-                            meta["tracker_status"][self.tracker]["status_message"] = response_data
-                            match = re.search(r"https://nebulance\.io/torrents\.php\?id=(\d+)", response_data.get("link", ""))
+                            meta['tracker_status'][self.tracker]['status_message'] = response_data
+                            match = re.search(r"https://nebulance\.io/torrents\.php\?id=(\d+)", response_data.get('link', ''))
                             if match:
                                 torrent_id = match.group(1)
-                                meta["tracker_status"][self.tracker]["torrent_id"] = torrent_id
+                                meta['tracker_status'][self.tracker]['torrent_id'] = torrent_id
                             return True
                         except json.JSONDecodeError:
-                            meta["tracker_status"][self.tracker]["status_message"] = "data error: NBL json decode error, the API is probably down"
+                            meta['tracker_status'][self.tracker]['status_message'] = "data error: NBL json decode error, the API is probably down"
                             return False
                     else:
-                        response_data = {"error": f"Unexpected status code: {response.status_code}", "response_content": response.text}
-                        meta["tracker_status"][self.tracker]["status_message"] = response_data
+                        response_data = {
+                            "error": f"Unexpected status code: {response.status_code}",
+                            "response_content": response.text
+                        }
+                        meta['tracker_status'][self.tracker]['status_message'] = response_data
                     return False
             else:
                 console.print("[cyan]NBL Request Data:")
                 console.print(data)
-                meta["tracker_status"][self.tracker]["status_message"] = "Debug mode enabled, not uploading."
+                meta['tracker_status'][self.tracker]['status_message'] = "Debug mode enabled, not uploading."
                 await self.common.create_torrent_for_upload(meta, f"{self.tracker}" + "_DEBUG", f"{self.tracker}" + "_DEBUG", announce_url="https://fake.tracker")
                 return True  # Debug mode - simulated success
         except Exception as e:
-            meta["tracker_status"][self.tracker]["status_message"] = f"data error: Upload failed: {e}"
+            meta['tracker_status'][self.tracker]['status_message'] = f"data error: Upload failed: {e}"
             return False
 
     async def search_existing(self, meta: Meta, _disctype: str) -> Union[list[dict[str, Any]], bool]:
-        if meta["category"] != "TV":
-            if meta["tvmaze_id"] != 0:
-                if not meta["unattended"] or (meta["unattended"] and meta.get("unattended_confirm", False)):
+        if meta['category'] != 'TV':
+            if meta['tvmaze_id'] != 0:
+                if not meta['unattended'] or (meta['unattended'] and meta.get('unattended_confirm', False)):
                     console.print("[red]Only TV or TV Movies are allowed at NBL, this has a tvmaze ID[/red]")
                     if cli_ui.ask_yes_no("Do you want to upload it?", default=False):
                         pass
                     else:
-                        meta["skipping"] = "NBL"
+                        meta['skipping'] = "NBL"
                         return []
                 else:
-                    meta["skipping"] = "NBL"
+                    meta['skipping'] = "NBL"
                     return []
             else:
-                if not meta["unattended"]:
+                if not meta['unattended']:
                     console.print("[red]Only TV Is allowed at NBL")
-                meta["skipping"] = "NBL"
+                meta['skipping'] = "NBL"
                 return []
 
-        if meta.get("is_disc") is not None:
-            if not meta["unattended"]:
-                console.print("[bold red]NBL does not allow raw discs")
-            meta["skipping"] = "NBL"
-            return []
-
-        if meta["is_disc"] != "BDMV" and not await self.common.check_language_requirements(
+        if meta['is_disc'] != "BDMV" and not await self.common.check_language_requirements(
             meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True, original_language=True
         ):
             return False
 
-        if meta["valid_mi"] is False:
+        if meta['valid_mi'] is False:
             console.print(f"[bold red]No unique ID in mediainfo, skipping {self.tracker} upload.")
             return False
+
+        if meta.get('is_disc') is not None:
+            if not meta['unattended']:
+                console.print('[bold red]NBL does not allow raw discs')
+            meta['skipping'] = "NBL"
+            return []
 
         dupes: list[dict[str, Any]] = []
 
         season = meta.get("season_int", 0)
-        tvmaze_data = meta.get("tvmaze_episode_data", {})
+        tvmaze_data = meta.get('tvmaze_episode_data', {})
         if tvmaze_data:
-            season = tvmaze_data.get("season_number", season)
+            season = tvmaze_data.get('season_number', season)
 
         params: dict[str, Any] = {
             "action": "search",
@@ -226,12 +168,12 @@ class NBL:
         else:
             params["series"] = meta["title"]
 
-        params["tags"] = [meta["resolution"]]
-        params["per_page"] = 100
+        params['tags'] = [meta['resolution']]
+        params['per_page'] = 100
 
         response: Optional[httpx.Response] = None
         try:
-            max_pages = int(self.config["TRACKERS"][self.tracker].get("search_max_pages", 10))
+            max_pages = int(self.config['TRACKERS'][self.tracker].get('search_max_pages', 10))
             async with httpx.AsyncClient(timeout=10.0) as client:
                 for page in range(max_pages):
                     page_params = dict(params)
@@ -245,60 +187,67 @@ class NBL:
                                 error_data = cast(dict[str, Any], response.json())
                             except json.JSONDecodeError:
                                 error_data = {}
-                            error = error_data.get("error", {})
-                            message = str(error.get("message", "")) if isinstance(error, dict) else ""
+                            error = error_data.get('error', {})
+                            message = str(error.get('message', '')) if isinstance(error, dict) else ''
                             if "out of range" in message.lower() and "valid pages" in message.lower():
                                 break
                         console.print(f"[bold red]NBL HTTP request failed. Status: {response.status_code}")
                         console.print(f"[bold red]NBL Search Response Content (page {page}): {response.text}")
-                        meta["skipping"] = "NBL"
+                        meta['skipping'] = "NBL"
                         break
 
                     try:
                         data = cast(dict[str, Any], response.json())
                     except json.JSONDecodeError:
                         console.print("[bold yellow]NBL response content is not valid JSON. Skipping this API call.")
-                        meta["skipping"] = "NBL"
+                        meta['skipping'] = "NBL"
                         break
 
-                    items_value = data.get("items")
+                    items_value = data.get('items')
                     if not isinstance(items_value, list):
-                        result = cast(dict[str, Any], data.get("result", {}))
-                        items_value = result.get("items", [])
+                        result = cast(dict[str, Any], data.get('result', {}))
+                        items_value = result.get('items', [])
                     items = cast(list[dict[str, Any]], items_value) if isinstance(items_value, list) else []
                     if not items:
                         break
 
                     for each in items:
-                        tags_value = each.get("tags", [])
+                        tags_value = each.get('tags', [])
                         tags = cast(list[Any], tags_value) if isinstance(tags_value, list) else []
-                        if meta["resolution"] in tags:
-                            file_list_value = each.get("file_list", [])
+                        if meta['resolution'] in tags:
+                            file_list_value = each.get('file_list', [])
                             file_list = cast(list[Any], file_list_value) if isinstance(file_list_value, list) else []
-                            files_str = ", ".join(str(item) for item in file_list) if file_list else str(cast(Any, file_list_value))
+                            files_str = ', '.join(str(item) for item in file_list) if file_list else str(cast(Any, file_list_value))
                             result = {
-                                "name": str(each.get("rls_name", "")),
-                                "files": files_str,
-                                "size": int(each.get("size", 0)),
-                                "link": f"https://nebulance.io/torrents.php?id={each.get('group_id', '')}",
-                                "file_count": len(file_list) if file_list else 1,
-                                "download": str(each.get("download", "")),
+                                'name': str(each.get('rls_name', '')),
+                                'files': files_str,
+                                'size': int(each.get('size', 0)),
+                                'link': f"https://nebulance.io/torrents.php?id={each.get('group_id', '')}",
+                                'file_count': len(file_list) if file_list else 1,
+                                'download': str(each.get('download', '')),
                             }
                             dupes.append(result)
 
         except httpx.TimeoutException:
             console.print("[bold red]NBL request timed out after 10 seconds")
-            meta["skipping"] = "NBL"
+            meta['skipping'] = "NBL"
         except httpx.RequestError as e:
             console.print(f"[bold red]NBL an error occurred while making the request: {e}")
-            meta["skipping"] = "NBL"
+            meta['skipping'] = "NBL"
         except KeyError as e:
             console.print(f"[bold red]Unexpected KeyError: {e}")
-            if response is not None and "result" not in response.json():
+            if response is not None and 'result' not in response.json():
                 console.print("[red]NBL API returned an unexpected response. Please manually check for dupes.")
-                dupes.append({"name": "ERROR: PLEASE CHECK FOR EXISTING RELEASES MANUALLY", "files": "", "size": 0, "link": "", "file_count": 0, "download": ""})
+                dupes.append({
+                    'name': "ERROR: PLEASE CHECK FOR EXISTING RELEASES MANUALLY",
+                    'files': '',
+                    'size': 0,
+                    'link': '',
+                    'file_count': 0,
+                    'download': ''
+                })
         except Exception as e:
-            meta["skipping"] = "NBL"
+            meta['skipping'] = "NBL"
             console.print(f"[bold red]NBL unexpected error: {e}")
             console.print_exception()
 
