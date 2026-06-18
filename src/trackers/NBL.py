@@ -132,7 +132,7 @@ class NBL:
             "tvmazeid": int(meta.get("tvmaze_id", 0)),
             "mediainfo": mi_dump,
             "category": await self.get_cat_id(meta),
-            "ignoredupes": "on",
+            "ignoredupes": "1",
         }
 
         try:
@@ -184,12 +184,6 @@ class NBL:
                 meta["skipping"] = "NBL"
                 return []
 
-        if meta.get("is_disc") is not None:
-            if not meta["unattended"]:
-                console.print("[bold red]NBL does not allow raw discs")
-            meta["skipping"] = "NBL"
-            return []
-
         if meta["is_disc"] != "BDMV" and not await self.common.check_language_requirements(
             meta, self.tracker, languages_to_check=["english"], check_audio=True, check_subtitle=True, original_language=True
         ):
@@ -198,6 +192,12 @@ class NBL:
         if meta["valid_mi"] is False:
             console.print(f"[bold red]No unique ID in mediainfo, skipping {self.tracker} upload.")
             return False
+
+        if meta.get("is_disc") is not None:
+            if not meta["unattended"]:
+                console.print("[bold red]NBL does not allow raw discs")
+            meta["skipping"] = "NBL"
+            return []
 
         dupes: list[dict[str, Any]] = []
 

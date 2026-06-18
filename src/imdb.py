@@ -349,7 +349,7 @@ class ImdbManager:
             edition_list: list[str] = []
             imdb_info["edition_details"] = {}
 
-            for edge in editions:
+            for _edition_idx, edge in enumerate(editions):
                 node = self.safe_get(edge, ["node"], {})
                 seconds = self.safe_get(node, ["seconds"], 0)
                 minutes = seconds // 60 if seconds else 0
@@ -368,9 +368,10 @@ class ImdbManager:
                 if seconds and displayable_property:
                     edition_list.append(edition_display)
 
-                    runtime_key = str(minutes)
+                    runtime_key = f"{minutes}_{_edition_idx}"
                     imdb_info["edition_details"][runtime_key] = {"display_name": displayable_property, "seconds": seconds, "minutes": minutes, "attributes": attribute_texts}
 
+            imdb_info["edition_count"] = len(edition_list)
             imdb_info["editions"] = ", ".join(edition_list)
 
         akas_edges = cast(list[Mapping[str, Any]], self.safe_get(title_data, ["akas", "edges"], default=[]))

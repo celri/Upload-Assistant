@@ -75,6 +75,20 @@ def _to_int(value: Any, default: int = 0) -> int:
         return default
 
 
+def _title_without_leading_article(title: str) -> str:
+    return re.sub(r"^(the|a|an)\s+", "", title.strip().lower(), flags=re.IGNORECASE)
+
+
+def _tvdb_title_drops_existing_leading_article(current_title: Any, tvdb_title: str) -> bool:
+    if not isinstance(current_title, str) or not current_title.strip() or not tvdb_title.strip():
+        return False
+
+    current = current_title.strip().lower()
+    tvdb = tvdb_title.strip().lower()
+    current_has_article = re.match(r"^(the|a|an)\s+", current, flags=re.IGNORECASE) is not None
+    return current_has_article and current != tvdb and _title_without_leading_article(current) == tvdb
+
+
 class Prep:
     """
     Prepare for upload:
@@ -605,11 +619,7 @@ class Prep:
         except (ValueError, TypeError):
             meta["tvmaze_id"] = 0
 
-        manual_cat = meta.get("manual_category")
-        if manual_cat:
-            # --category flag always wins over auto-detected / previously set category
-            meta["category"] = manual_cat.upper() if isinstance(manual_cat, str) else meta.get("category", "").upper()
-        elif not meta.get("category"):
+        if not meta.get("category"):
             meta["category"] = await self.get_cat(video, meta)
         else:
             meta["category"] = meta["category"].upper()
@@ -987,16 +997,6 @@ class Prep:
         if meta.get("aka", None) is None:
             meta["aka"] = ""
 
-        # Suppress AKA when it only differs from the main title by case or trivial
-        # punctuation (e.g. "Sapne Vs Everyone" vs "Sapne vs Everyone").  This can
-        # occur when TMDB pre-sets meta["aka"] before the IMDb similarity check above
-        # runs (which skips when meta["aka"] is already populated).
-        if meta.get("aka"):
-            _aka_bare = meta["aka"][4:].strip() if meta["aka"].upper().startswith("AKA ") else meta["aka"]
-            _main = str(meta.get("title", ""))
-            if SequenceMatcher(None, _main.casefold(), _aka_bare.casefold()).ratio() >= 0.9:
-                meta["aka"] = ""
-
         # if it was skipped earlier, make sure we have the season/episode data
         if not meta.get("not_anime", False) and meta.get("category") == "TV":
             meta = await self.season_episode_manager.get_season_episode(video, meta)
@@ -1121,10 +1121,10 @@ class Prep:
                     year_match = re.search(r"\b(19|20)\d{2}\b", series_name)
                     if year_match:
                         extracted_year = year_match.group(0)
-                        meta["search_year"] = extracted_year
                         series_name = re.sub(r"\s*\b(19|20)\d{2}\b\s*", "", series_name).strip()
                     series_name = series_name.replace("(", "").replace(")", "").strip()
-                    if series_name and year_match:  # Only set if not empty and year was found
+                    should_use_tvdb_series_name = series_name and not _tvdb_title_drops_existing_leading_article(meta.get("title"), series_name)
+                    if should_use_tvdb_series_name:
                         meta["title"] = series_name
 
         # bluray.com data if config
@@ -1343,8 +1343,8 @@ class Prep:
         ]
 
         filename_patterns = [
-            r"(?i)\bs\d{1,2}e\d{1,2}\b",
-            r"(?i)\bs\d{1,2}\b",
+            r"(?i)s\d{1,2}e\d{1,2}",
+            r"(?i)s\d{1,2}",
             r"(?i)\b\d{1,2}x\d{2}\b",
             r"(?i)(?:season|series)\s*\d+",
             r"(?i)e\d{2,3}\s*\-",
@@ -1366,17 +1366,6 @@ class Prep:
             if re.search(pattern, uuid) or re.search(pattern, os.path.basename(path)):
                 if meta.get("debug", False):
                     console.print(f"[cyan]Matched TV pattern in filename: {pattern}[/cyan]")
-                return "TV"
-
-        # If the folder contains multiple video files whose basenames each match episode
-        # patterns (e.g. S01E01, S01E02 …), treat the whole pack as a TV series even when
-        # the folder name itself carries no season/episode marker.
-        filelist = cast(list[str], meta.get("filelist") or [])
-        if len(filelist) > 1:
-            episode_matches = sum(1 for f in filelist if re.search(r"(?i)\bs\d{1,2}e\d{1,2}\b|\b\d{1,2}x\d{2}\b", os.path.basename(f)))
-            if episode_matches >= 2:
-                if meta.get("debug", False):
-                    console.print(f"[cyan]Detected TV pack: {episode_matches}/{len(filelist)} files match episode pattern[/cyan]")
                 return "TV"
 
         if "subsplease" in path.lower() or "subsplease" in uuid.lower():
