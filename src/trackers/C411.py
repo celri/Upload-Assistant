@@ -445,8 +445,8 @@ class C411(FrenchTrackerMixin):
         uuid = str(meta.get("uuid", "")).lower()
         is_disc = str(meta.get("is_disc", ""))
         is_4klight = "4klight" in uuid
-        # Source-based distinction: BluRay (encode from disc) vs WEB
-        is_webrip = release_type == "WEBRIP"
+        # Source-based distinction: BluRay (encode from disc) vs WEB (WEBDL and WEBRIP both map to WR slots)
+        is_web = release_type in ("WEBRIP", "WEBDL")
 
         lossless = self._is_lossless_audio(audio)
         h264 = self._is_h264_codec(codec)
@@ -468,7 +468,7 @@ class C411(FrenchTrackerMixin):
 
         # ── COMPAT: H.264, 1080p, SDR, Lossy ──
         if h264 and not is_4k and not has_hdr:
-            if is_webrip:
+            if is_web:
                 return f"{prefix}COMPAT-WR"
             return f"{prefix}COMPAT-01"
 
@@ -478,13 +478,13 @@ class C411(FrenchTrackerMixin):
             if is_4k:
                 if is_4klight:
                     return f"{prefix}HCOPT-2160-4KL-{codec_suffix}"
-                if is_webrip:
+                if is_web:
                     if has_hdr:
                         return f"{prefix}HCOPT-2160-WR-{codec_suffix}-HDR"
                     return f"{prefix}HCOPT-2160-WR-{codec_suffix}"
                 return f"{prefix}HCOPT-2160-BD-{codec_suffix}"
             else:
-                if is_webrip:
+                if is_web:
                     return f"{prefix}HCOPT-1080-WR-{codec_suffix}"
                 return f"{prefix}HCOPT-1080-BD-{codec_suffix}"
 
@@ -495,14 +495,14 @@ class C411(FrenchTrackerMixin):
             if has_hdr:
                 return f"{prefix}OPTI-2160-HDR"
             else:
-                if is_webrip:
+                if is_web:
                     return f"{prefix}OPTI-2160-SDR-WR"
                 return f"{prefix}OPTI-2160-SDR-BD"
         else:
             # 1080p
             if has_hdr:
                 return f"{prefix}OPTI-1080-HDR"
-            if is_webrip:
+            if is_web:
                 return f"{prefix}OPTI-1080-SDR-WR"
             return f"{prefix}OPTI-1080-SDR-BD"
 
@@ -526,7 +526,12 @@ class C411(FrenchTrackerMixin):
         is_remux = "REMUX" in n
         is_bdmv = "BDMV" in n or "BD.FULL" in n or "COMPLETE.BLURAY" in n
         is_iso = "ISO" in n.split(".")
-        is_webrip = "WEBRIP" in n or "WEB.RIP" in n
+        # Restrict the ambiguous ".WEB." token to the technical portion (post-year) to
+        # avoid matching it in movie titles such as "The.Girl.in.the.Spider.s.WEB.2018...".
+        # WEBRIP / WEB.RIP / WEB.DL / WEBDL are unambiguous and stay on the full string.
+        _year_m = re.search(r"\.(19|20)\d{2}\.", n)
+        _tech = n[_year_m.start() :] if _year_m else n
+        is_web = "WEBRIP" in n or "WEB.RIP" in n or "WEB.DL" in n or "WEBDL" in n or ".WEB." in _tech
         is_4klight = "4KLIGHT" in n
 
         # Codec
@@ -557,7 +562,7 @@ class C411(FrenchTrackerMixin):
 
         # ── COMPAT: H.264, 1080p, SDR ──
         if h264 and not is_4k and not has_hdr:
-            return f"{prefix}COMPAT-WR" if is_webrip else f"{prefix}COMPAT-01"
+            return f"{prefix}COMPAT-WR" if is_web else f"{prefix}COMPAT-01"
 
         # ── HCOPT or OPTI ──
         if lossless or has_dv or av1:
@@ -566,13 +571,13 @@ class C411(FrenchTrackerMixin):
             if is_4k:
                 if is_4klight:
                     return f"{prefix}HCOPT-2160-4KL-{codec_suffix}"
-                if is_webrip:
+                if is_web:
                     if has_hdr:
                         return f"{prefix}HCOPT-2160-WR-{codec_suffix}-HDR"
                     return f"{prefix}HCOPT-2160-WR-{codec_suffix}"
                 return f"{prefix}HCOPT-2160-BD-{codec_suffix}"
             else:
-                if is_webrip:
+                if is_web:
                     return f"{prefix}HCOPT-1080-WR-{codec_suffix}"
                 return f"{prefix}HCOPT-1080-BD-{codec_suffix}"
 
@@ -583,13 +588,13 @@ class C411(FrenchTrackerMixin):
             if has_hdr:
                 return f"{prefix}OPTI-2160-HDR"
             else:
-                if is_webrip:
+                if is_web:
                     return f"{prefix}OPTI-2160-SDR-WR"
                 return f"{prefix}OPTI-2160-SDR-BD"
         else:
             if has_hdr:
                 return f"{prefix}OPTI-1080-HDR"
-            if is_webrip:
+            if is_web:
                 return f"{prefix}OPTI-1080-SDR-WR"
             return f"{prefix}OPTI-1080-SDR-BD"
 
@@ -1820,11 +1825,29 @@ class C411(FrenchTrackerMixin):
 
         # ── Lossy / Lossless coexistence (permanent) ──
         # A lossy version and a lossless version can always coexist in the same slot.
+        # Exception: for VOSTFR uploads, always keep FR-audio releases regardless of
+        # lossless/lossy — they must reach _check_french_lang_dupes to be flagged as
+        # french_lang_supersede. Without this, a MULTI EAC3 release would be silently
+        # removed before the language-hierarchy check can see it.
         if dupes:
-            upload_audio = str(meta.get("audio", ""))
-            upload_lossless = self._is_lossless_audio(upload_audio)
+            upload_audio_str = str(meta.get("audio", ""))
+            upload_lossless = self._is_lossless_audio(upload_audio_str)
+            upload_audio_tag = await self._build_audio_string(meta)
+            _, upload_lang_level = self._extract_french_lang_tag(upload_audio_tag)
+            # Level 1=VO, 2=VOSTFR, >=3=FR audio, 0=no French tag (e.g. English release).
+            # Only treat the upload as VOSTFR when it carries an explicit VO/VOSTFR tag.
+            is_vostfr_upload = 1 <= upload_lang_level < 3
             before = len(dupes)
-            dupes = [d for d in dupes if self._is_lossless_from_name(d.get("name", "")) == upload_lossless]
+
+            def _keep_dupe(d: dict) -> bool:
+                name = d.get("name", "")
+                if is_vostfr_upload:
+                    _, name_level = self._extract_french_lang_tag(name)
+                    if name_level >= 3:
+                        return True  # FR-audio: let _check_french_lang_dupes handle it
+                return self._is_lossless_from_name(name) == upload_lossless
+
+            dupes = [d for d in dupes if _keep_dupe(d)]
             if meta.get("debug") and len(dupes) < before:
                 kind = "lossless" if upload_lossless else "lossy"
                 opposite = "lossy" if upload_lossless else "lossless"
