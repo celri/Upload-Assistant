@@ -21,6 +21,7 @@ from unidecode import unidecode
 
 from src.audio import AD_TRACK_RE, codec_info_from_track
 from src.console import console
+from src.predb_fr import crosscheck as predb_fr_crosscheck
 from src.torrentcreate import TorrentCreator
 from src.trackers.COMMON import COMMON
 
@@ -425,7 +426,18 @@ class FrenchTrackerMixin:
             if not meta.get("unattended", False):
                 console.print(f"[bold red]Language requirements not met for {self.tracker}.[/bold red]")
             return False
-        return True
+        return await self.predb_fr_check(meta)
+
+    async def predb_fr_check(self, meta: Meta) -> bool:
+        """Optional predb.fr cross-check (opt-in via DEFAULT.predb_fr_api_key).
+
+        Blocking TMDB/nuke divergences gate the upload (bypassable when
+        attended; refused when unattended); group reputation is advisory.
+        French trackers that override ``get_additional_checks`` without calling
+        ``super()`` should end their success path with
+        ``return await self.predb_fr_check(meta)`` so the cross-check still runs.
+        """
+        return await predb_fr_crosscheck(meta, self.config, self.tracker)  # type: ignore[attr-defined]
 
     # ──────────────────────────────────────────────────────────
     #  Edition formatting
@@ -1895,6 +1907,12 @@ class FrenchTrackerMixin:
             stem = os.path.splitext(path)[0]
             nfo_path = f"{stem}.nfo"
             nfo_files = [nfo_path] if os.path.isfile(nfo_path) else []
+        # A physical NFO always wins.  Only when none exists do we fall back to
+        # the canonical NFO fetched from predb.fr on an exact match (if any).
+        if not nfo_files:
+            predb_nfo = str(meta.get("predb_fr_nfo_file", ""))
+            if predb_nfo and os.path.isfile(predb_nfo):
+                nfo_files = [predb_nfo]
         if nfo_files:
             meta["keep_nfo"] = True
         return nfo_files
@@ -1986,6 +2004,13 @@ class FrenchTrackerMixin:
             # Compute path components relative to content_path
             rel = os.path.relpath(nfo_path, content_path)
             path_components = rel.replace("\\", "/").split("/")
+
+            # Skip NFOs that live outside the release tree (e.g. a predb.fr NFO
+            # fetched into tmp/): they have no valid in-torrent path. They are
+            # still delivered through the tracker's separate NFO upload field,
+            # exactly like the generated MediaInfo NFO.
+            if os.path.isabs(rel) or ".." in path_components:
+                continue
 
             if tuple(path_components) in existing_rel_paths:
                 return None
