@@ -1083,6 +1083,52 @@ class TestCodecCleanup:
         assert '.x264' not in name
 
 
+# ─── 4KLight / HDLight token in name ─────────────────────────
+
+class TestLightEncodeTag:
+    """4KLight/HDLight (BluRay light re-encodes) must survive into the name,
+    placed right after the source — they aren't a meta field, so they're read
+    from the original filename (uuid)."""
+
+    def _run(self, meta: dict[str, Any]) -> str:
+        c = C411(_config())
+        c._get_french_title = AsyncMock(return_value=meta.get('title', ''))
+        c._build_audio_string = AsyncMock(return_value='')
+        return asyncio.run(c.get_name(meta)).get('name', '')
+
+    def test_4klight_after_source(self):
+        meta = _meta_base(
+            title='Solo', year='2018', type='ENCODE', source='BluRay',
+            resolution='2160p', video_encode='x265', hdr='DV HDR',
+            uuid='Solo.2018.2160p.4KLight.DV.HDR.BluRay.x265-QTZ.mkv',
+            mediainfo=_mi([_audio_track('fr')]), original_language='en',
+        )
+        name = self._run(meta)
+        assert '4KLight' in name, name
+        # placed immediately after the source token
+        assert 'BluRay.4KLight' in name, name
+
+    def test_hdlight_token(self):
+        meta = _meta_base(
+            title='Film', year='2020', type='ENCODE', source='BluRay',
+            resolution='1080p', video_encode='x265',
+            uuid='Film.2020.1080p.HDLight.BluRay.x265-GRP.mkv',
+            mediainfo=_mi([_audio_track('fr')]), original_language='en',
+        )
+        name = self._run(meta)
+        assert 'HDLight' in name, name
+
+    def test_no_light_tag_when_absent(self):
+        meta = _meta_base(
+            title='Film', year='2020', type='ENCODE', source='BluRay',
+            resolution='2160p', video_encode='x265',
+            uuid='Film.2020.2160p.BluRay.x265-GRP.mkv',
+            mediainfo=_mi([_audio_track('fr')]), original_language='en',
+        )
+        name = self._run(meta)
+        assert 'Light' not in name, name
+
+
 # ─── Category / Subcategory mapping ──────────────────────────
 
 class TestCategoryMapping:
@@ -2106,6 +2152,42 @@ class TestSlotADEdition:
         meta['uhd'] = 'UHD'
         slot = c._determine_c411_slot(meta)
         assert slot == 'AD|PURE-UHD-REMUX'
+
+
+class TestSlotHybridEdition:
+    """Hybrid lives in meta['webdv'], but the name parser sees a HYBRID token —
+    both slot paths must agree, else a Hybrid release fails to match its dupe."""
+
+    def test_hybrid_from_webdv_meta(self):
+        c = C411(_config())
+        meta = _meta_base(
+            type='ENCODE', resolution='2160p', source='BluRay', video_encode='x265',
+            hdr='DV HDR', audio='TrueHD Atmos 7.1',
+            uuid='Solo.2018.2160p.4KLight.BluRay.x265-QTZ.mkv',
+        )
+        meta['webdv'] = 'Hybrid'
+        assert c._detect_special_edition_from_meta(meta) == 'HYBRID'
+        assert c._determine_c411_slot(meta).startswith('HYBRID|')
+
+    def test_hybrid_meta_slot_matches_name_slot(self):
+        c = C411(_config())
+        meta = _meta_base(
+            type='ENCODE', resolution='2160p', source='BluRay', video_encode='x265',
+            hdr='DV HDR', audio='TrueHD Atmos 7.1',
+            uuid='Solo.2018.2160p.4KLight.BluRay.x265-QTZ.mkv',
+        )
+        meta['webdv'] = 'Hybrid'
+        dupe = 'Solo.A.Star.Wars.Story.2018.Hybrid.MULTI.VFF.2160p.BluRay.4KLight.DV.HDR10.TrueHD.Atmos.7.1.x265-QTZ'
+        assert c._determine_c411_slot(meta) == c._determine_c411_slot_from_name(dupe)
+
+    def test_no_webdv_no_hybrid_prefix(self):
+        c = C411(_config())
+        meta = _meta_base(
+            type='ENCODE', resolution='2160p', source='BluRay', video_encode='x265',
+            hdr='DV HDR', audio='TrueHD Atmos 7.1',
+            uuid='Solo.2018.2160p.4KLight.BluRay.x265-QTZ.mkv',
+        )
+        assert not c._determine_c411_slot(meta).startswith('HYBRID|')
 
 
 # ─── Lossy / Lossless coexistence ────────────────────────────
