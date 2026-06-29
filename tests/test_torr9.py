@@ -1242,6 +1242,82 @@ class TestDupeRelevanceFilter:
         # The differently-formatted existing release is still detected as a dupe.
         assert len(dupes) == 1
 
+    def test_search_walks_all_pages(self):
+        """Dupes on later pages must still be found.
+
+        Regression: the API paginates (default 25/page, total_pages can be >1). A
+        popular title (e.g. ~230 results) spreads matching editions across pages;
+        an exact-name dupe on page 2 slipped through when only page 1 was read.
+        The search must walk every page until total_pages.
+        """
+        t = TORR9(_config())
+        t._bearer_token = 'test-token'
+        meta = _meta_base(title='Les enfants vont bien', frtitle='Les enfants vont bien',
+                          year='2025', resolution='1080p', original_language='fr', tag='-FW')
+
+        # Page 1: no match. Page 2: the -FW dupe. Single (fr) search term → 2 pages.
+        page1 = MagicMock()
+        page1.status_code = 200
+        page1.json.return_value = {
+            'torrents': [{'title': 'Les.enfants.vont.bien.2025.FRENCH.1080p.WEB.H265-OTHER', 'id': 1}],
+            'total_pages': 2,
+        }
+        page2 = MagicMock()
+        page2.status_code = 200
+        page2.json.return_value = {
+            'torrents': [{'title': 'Les.enfants.vont.bien.2025.FRENCH.1080p.WEB.H264-FW', 'id': 2}],
+            'total_pages': 2,
+        }
+
+        with patch('httpx.AsyncClient') as MockClient:
+            client_instance = AsyncMock()
+            client_instance.get = AsyncMock(side_effect=[page1, page2])
+            client_instance.__aenter__ = AsyncMock(return_value=client_instance)
+            client_instance.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value = client_instance
+
+            dupes = _run(t.search_existing(meta, ''))
+
+        # Both pages were requested, with ascending page numbers and the
+        # widened page size (limit=100, not the API's default 25).
+        params = [c.kwargs.get('params', {}) for c in client_instance.get.call_args_list]
+        assert [p.get('page') for p in params[:2]] == [1, 2]
+        assert all(int(p.get('limit', 25)) == 100 for p in params[:2])
+        # The dupe from page 2 was detected.
+        assert any(d['name'].endswith('-FW') for d in dupes)
+
+    def test_partial_page_walk_fails_closed(self):
+        """If a later page can't be read, skip the tracker instead of risking a miss.
+
+        A dupe could sit on the page we failed to fetch, so proceeding on partial
+        results would be a false negative. Fail closed: mark the tracker skipped.
+        """
+        t = TORR9(_config())
+        t._bearer_token = 'test-token'
+        meta = _meta_base(title='Game of Thrones', frtitle='Game of Thrones',
+                          year='2011', resolution='1080p', original_language='en', tag='-FW')
+
+        page1 = MagicMock()
+        page1.status_code = 200
+        page1.json.return_value = {
+            'torrents': [{'title': 'Game.of.Thrones.S01.1080p.WEB-OTHER', 'id': 1}],
+            'total_pages': 3,
+        }
+        page2_err = MagicMock()
+        page2_err.status_code = 503  # transient failure mid-walk
+
+        with patch('httpx.AsyncClient') as MockClient:
+            client_instance = AsyncMock()
+            client_instance.get = AsyncMock(side_effect=[page1, page2_err])
+            client_instance.__aenter__ = AsyncMock(return_value=client_instance)
+            client_instance.__aexit__ = AsyncMock(return_value=False)
+            MockClient.return_value = client_instance
+
+            dupes = _run(t.search_existing(meta, ''))
+
+        assert dupes == []
+        assert meta.get('skipping') == t.tracker
+
     def test_tv_dupes_without_year_in_name(self):
         """TV torrents whose names lack the year should still be detected as duplicates."""
         t = TORR9(_config())
