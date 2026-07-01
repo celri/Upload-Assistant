@@ -353,6 +353,7 @@ FRENCH_LANG_HIERARCHY: dict[str, int] = {
     "VFB": 6,
     "VF2": 6,
     "VOF": 5,
+    "VOQ": 5,  # original Québécois audio — Québec counterpart of VOF
     "TRUEFRENCH": 4,
     "FRENCH": 3,
     "VOSTFR": 2,
@@ -878,6 +879,12 @@ class FrenchTrackerMixin:
             if is_vf2_filename:
                 return "VF2"
             if is_original_french:
+                # Original French production. Distinguish Québec (fr-CA audio) from
+                # France: a Québécois original is VOQ, a French one VOF. Filename VFQ
+                # only counts as a fallback when MediaInfo carries no explicit region,
+                # so an explicit fr-FR (VFF) is never overridden to VOQ.
+                if fr_suffix == "VFQ" or (not fr_suffix and is_vfq_filename):
+                    return "VOQ"
                 return "VOF"
             if is_vfi:
                 return "VFI"
@@ -905,9 +912,9 @@ class FrenchTrackerMixin:
         elif [la for la in audio_langs if la != "FRA"] or num_audio_tracks > 1 or has_non_french_ad:
             language = f"MULTI.{_fr_precision()}"
         # ── Single French track ──
-        elif is_original_french:
-            language = "VOF"
         else:
+            # Includes the original-French case: _fr_precision() returns VOF, or
+            # VOQ when the original audio is Québécois (fr-CA).
             language = _fr_precision()
 
         # ── Audio Description prefix ──

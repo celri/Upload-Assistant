@@ -1547,3 +1547,47 @@ class TestFormatHdrDvBbcode:
     def test_wcg(self):
         c = C411(_config())
         assert c._format_hdr_dv_bbcode({'hdr': 'WCG'}) == 'WCG'
+
+
+# ═══════════════════════════════════════════════════════════════
+#   _build_audio_string — original Québécois (VOQ vs VOF)
+# ═══════════════════════════════════════════════════════════════
+
+
+class TestOriginalQuebecois:
+    """An original French production with Québec audio is VOQ, not VOF."""
+
+    def test_single_quebec_original_track_is_voq(self):
+        """fr-CA single track + original_language fr → VOQ (regression: was VOF)."""
+        host = _mixin()
+        meta = _meta_base(
+            category='TV',
+            season='S01',
+            original_language='fr',
+            mediainfo=_mi([_audio_track('fr-CA')]),
+        )
+        assert asyncio.run(host._build_audio_string(meta)) == 'VOQ'
+
+    def test_single_france_original_track_is_vof(self):
+        """fr-FR single track + original_language fr → VOF (unchanged)."""
+        host = _mixin()
+        meta = _meta_base(original_language='fr', mediainfo=_mi([_audio_track('fr-FR')]))
+        assert asyncio.run(host._build_audio_string(meta)) == 'VOF'
+
+    def test_voq_recognised_in_hierarchy(self):
+        """VOQ is a known FR audio tag at original-audio level (same as VOF)."""
+        tag, level = FrenchTrackerMixin._extract_french_lang_tag(
+            'Le.dernier.des.monstres.2025.S01.VOQ.1080p.WEB.H264-TFA'
+        )
+        assert tag == 'VOQ'
+        assert level == 5
+
+    def test_explicit_france_not_overridden_by_vfq_filename(self):
+        """Explicit fr-FR audio wins over a stray VFQ filename token → VOF, not VOQ."""
+        host = _mixin()
+        meta = _meta_base(
+            original_language='fr',
+            name='Film.2025.VFQ.1080p.WEB.H264-GRP',
+            mediainfo=_mi([_audio_track('fr-FR')]),
+        )
+        assert asyncio.run(host._build_audio_string(meta)) == 'VOF'
