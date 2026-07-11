@@ -56,7 +56,7 @@ class NST(FrenchTrackerMixin, UNIT3D):
     # NST uses original (English) titles
     PREFER_ORIGINAL_TITLE: bool = True
 
-    # NST wants streaming service in name
+    # NST doesn't want streaming service in name
     INCLUDE_SERVICE_IN_NAME: bool = False
 
     UHD_ONLY_FOR_REMUX_DISC: bool = True
@@ -172,7 +172,7 @@ class NST(FrenchTrackerMixin, UNIT3D):
             check_subtitle=False,
         ):
             console.print(f"[bold red]{self.tracker} requires French language unless there has never been a dubbed version.[/bold red]")
-            french_missing_confirm = cli_ui.ask_yes_no("Do you want to proceed anyway?", default=False)
+            french_missing_confirm = cli_ui.ask_yes_no("Do you want to proceed anyway?", default=True)
             return french_missing_confirm
         return True
 
@@ -460,7 +460,7 @@ class NST(FrenchTrackerMixin, UNIT3D):
             if sub in (qc_aliases | fr_aliases | be_aliases) and not has_vf:
                 detected_langs.add("VOSTFR")
 
-        if "Autre" in detected_langs and "VOSTFR" not in detected_langs and not langs:
+        if "Autre" in detected_langs and "VOSTFR" not in detected_langs and not langs and not has_vf:
             return ""
 
         final_tags = [tag for tag in ("VOF", "VFF", "VFQ", "VFB", "VFI", "VOSTFR", "AD", "MUET", "VO") if tag in langs or tag in detected_langs]
