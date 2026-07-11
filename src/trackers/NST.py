@@ -463,9 +463,6 @@ class NST(FrenchTrackerMixin, UNIT3D):
         if "Autre" in detected_langs and "VOSTFR" not in detected_langs and not langs:
             return ""
 
-        final_tags = []
-        for tag in ("VOF", "VFF", "VFQ", "VFB", "VFI", "VOSTFR", "AD", "MUET", "VO"):
-            if tag in langs or tag in detected_langs:
-                final_tags.append(tag)
+        final_tags = [tag for tag in ("VOF", "VFF", "VFQ", "VFB", "VFI", "VOSTFR", "AD", "MUET", "VO") if tag in langs or tag in detected_langs]
 
         return ", ".join(final_tags)
