@@ -234,6 +234,8 @@ def _bitrate_meta(
         "valid_mi_settings": True,
         "type": type,
         "video_encode": codec,
+        # MediaInfo's Format, which the shared bitrate table is keyed on.
+        "video_codec": {"x265": "HEVC", "h.265": "HEVC", "x264": "AVC", "h.264": "AVC"}.get(codec.strip().lower(), codec.strip()),
         "resolution": resolution,
         "original_language": "en",
         "audio_languages": ["english"],
@@ -356,6 +358,12 @@ class TestAdditionalChecksMicroEncode:
         meta = _bitrate_meta(video_bitrate=1_000_000, codec="AVC", resolution="1080p")
         assert _run(_lst().get_additional_checks(meta)) is False
 
+    # ── AV1 1080p (threshold: 4 000 000 bps) ───────────────────
+
+    def test_av1_1080p_encode_uses_the_av1_threshold(self):
+        assert _run(_lst().get_additional_checks(_bitrate_meta(video_bitrate=4_500_000, codec=" AV1", type="ENCODE"))) is True
+        assert _run(_lst().get_additional_checks(_bitrate_meta(video_bitrate=3_500_000, codec=" AV1", type="ENCODE"))) is False
+
     # ── anime (x265 1080p threshold: 3 500 000 bps) ────────────
 
     def test_anime_takes_the_lower_threshold(self):
@@ -363,13 +371,27 @@ class TestAdditionalChecksMicroEncode:
         assert _run(_lst().get_additional_checks(_bitrate_meta(video_bitrate=4_000_000))) is False
         assert _run(_lst().get_additional_checks(_bitrate_meta(video_bitrate=3_400_000, anime=True))) is False
 
+    def test_low_bitrate_asks_an_interactive_user(self, monkeypatch):
+        """Interactive runs may override a bitrate below the minimum, as on TOS and BLU."""
+        for answer in (True, False):
+            monkeypatch.setattr("src.trackers.COMMON.cli_ui.ask_yes_no", lambda *_a, answer=answer, **_k: answer)
+            assert _run(_lst().get_additional_checks(_bitrate_meta(video_bitrate=748_000, unattended=False))) is answer
+
     # ── edge cases ──────────────────────────────────────────────
 
     def test_no_bitrate_in_mediainfo_is_rejected(self):
-        """Missing BitRate value must block the upload (fail-closed)."""
+        """Missing BitRate value skips the upload on an unattended run."""
         meta = _bitrate_meta(video_bitrate=0, codec="x265", resolution="1080p")
         meta["mediainfo"] = {"media": {"track": [{"@type": "Video"}]}}
         assert _run(_lst().get_additional_checks(meta)) is False
+
+    def test_no_bitrate_in_mediainfo_asks_an_interactive_user(self, monkeypatch):
+        """Interactive runs may override an unreadable bitrate, as on TOS and BLU."""
+        for answer in (True, False):
+            monkeypatch.setattr("src.trackers.COMMON.cli_ui.ask_yes_no", lambda *_a, answer=answer, **_k: answer)
+            meta = _bitrate_meta(video_bitrate=0, codec="x265", resolution="1080p", unattended=False)
+            meta["mediainfo"] = {"media": {"track": [{"@type": "Video"}]}}
+            assert _run(_lst().get_additional_checks(meta)) is answer
 
     def test_zero_bitrate_falls_through_to_nominal(self):
         """A zero BitRate is unusable, not authoritative: keep falling back."""
@@ -397,15 +419,15 @@ class TestAdditionalChecksMicroEncode:
         meta["mediainfo"] = {"media": {"track": [{"@type": "Video", "StreamSize": "500000000", "Duration": "5400.000"}]}}
         assert _run(_lst().get_additional_checks(meta)) is False
 
-    def test_unknown_codec_is_rejected(self):
-        """Unrecognised codec (e.g. VP9) must block the upload (fail-closed)."""
-        meta = _bitrate_meta(video_bitrate=5_000_000, codec="vp9", resolution="1080p")
-        assert _run(_lst().get_additional_checks(meta)) is False
+    def test_codec_without_rule_is_not_checked(self):
+        """No threshold for the codec (e.g. VP9) means no bitrate check, as on TOS and BLU."""
+        meta = _bitrate_meta(video_bitrate=500_000, codec="VP9", resolution="1080p")
+        assert _run(_lst().get_additional_checks(meta)) is True
 
-    def test_unmapped_resolution_is_rejected(self):
-        """Resolution with no rule (e.g. 480p) must block the upload (fail-closed)."""
-        meta = _bitrate_meta(video_bitrate=5_000_000, codec="x265", resolution="480p")
-        assert _run(_lst().get_additional_checks(meta)) is False
+    def test_resolution_without_rule_is_not_checked(self):
+        """No threshold for the resolution (e.g. 480p) means no bitrate check."""
+        meta = _bitrate_meta(video_bitrate=500_000, codec="x265", resolution="480p")
+        assert _run(_lst().get_additional_checks(meta)) is True
 
     def test_remux_type_skips_bitrate_check(self):
         """REMUX type is not subject to the bitrate gate."""
