@@ -468,7 +468,7 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
                                     console.print(f"[red]Error exporting torrent via proxy: {e}")
                                     continue
                         else:
-                            potential_qbt_client = await self.init_qbittorrent_client(client)
+                            potential_qbt_client = await self.init_qbittorrent_client(client, meta)
                             if not potential_qbt_client:
                                 continue
                             else:
@@ -517,7 +517,7 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
                     ssl_context = self.create_ssl_context_for_client(client)
                     qbt_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30), connector=aiohttp.TCPConnector(ssl=ssl_context))
                 else:
-                    qbt_client = await self.init_qbittorrent_client(client)
+                    qbt_client = await self.init_qbittorrent_client(client, meta)
 
                 search_start = time.time()
                 found_hash = await self.search_qbit_for_torrent(meta, client, qbt_client, qbt_session, proxy_url)
@@ -576,7 +576,7 @@ class Clients(QbittorrentClientMixin, RtorrentClientMixin, DelugeClientMixin, Tr
                             else:
                                 # Reuse or create qbt_client if needed
                                 if qbt_client is None:
-                                    qbt_client = await self.init_qbittorrent_client(client)
+                                    qbt_client = await self.init_qbittorrent_client(client, meta)
                                     if qbt_client is None:
                                         console.print("[bold red]Failed to connect to qBittorrent for export.")
                                         found_hash = None
