@@ -15,7 +15,6 @@ from typing import Any, Callable, Optional, TypedDict, Union, cast
 import aiohttp
 import cli_ui
 import qbittorrentapi
-from packaging.version import Version
 from torf import Torrent
 
 from cogs.redaction import Redaction
@@ -30,7 +29,6 @@ qbittorrent_locks: collections.defaultdict[tuple[str, int, str], asyncio.Lock] =
 )  # Locks for qbittorrent clients to prevent concurrent logins
 _qbit_health_cache: dict[str, bool] = {}  # Cached reachability per client URL (resets on restart)
 _qbit_user_decision_cache: dict[str, bool] = {}  # Cached user proceed-anyway decision per client URL
-_qbt_using_seedMode: bool = False
 
 
 class _CandidateEntry(TypedDict):
@@ -69,7 +67,7 @@ class QbittorrentClientMixin:
             qbt_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30), connector=aiohttp.TCPConnector(ssl=ssl_context))
             qbt_proxy_url = proxy_url.rstrip("/")
         else:
-            potential_qbt_client = await self.init_qbittorrent_client(client, meta)
+            potential_qbt_client = await self.init_qbittorrent_client(client)
             if not potential_qbt_client:
                 return meta
             else:
@@ -404,7 +402,7 @@ class QbittorrentClientMixin:
                     console.print(f"[bold red]{operation_name} failed after {max_retries + 1} attempts (final timeout: {timeout}s)")
                     raise  # Re-raise the TimeoutError so caller can handle it
 
-    async def init_qbittorrent_client(self, client: dict[str, Any], meta: dict[str, Any]) -> Optional[qbittorrentapi.Client]:
+    async def init_qbittorrent_client(self, client: dict[str, Any]) -> Optional[qbittorrentapi.Client]:
         # Creates and logs into a qbittorrent client, with caching to avoid redundant logins
         # If login fails, returns None
         # qbit_api_key (qBittorrent >= 5.2, stateless) takes precedence over user/password
@@ -437,7 +435,6 @@ class QbittorrentClientMixin:
                 console.print("[bold red]Failed to connect to qBittorrent - check host/port" + ("/API key" if api_key else ""))
                 return None
             else:
-                await self.check_api_version(qbt_client, meta)
                 qbittorrent_cached_clients[client_key] = qbt_client
                 return qbt_client
 
@@ -469,7 +466,7 @@ class QbittorrentClientMixin:
         try:
             try:
                 if qbt_client is None and proxy_url is None:
-                    potential_qbt_client = await self.init_qbittorrent_client(client, meta)
+                    potential_qbt_client = await self.init_qbittorrent_client(client)
                     if potential_qbt_client is None:
                         return None
                     qbt_client = potential_qbt_client
@@ -723,30 +720,6 @@ class QbittorrentClientMixin:
         finally:
             if created_session and qbt_session is not None:
                 await qbt_session.close()
-
-    async def check_api_version(self, qbt_client: qbittorrentapi.Client, meta: dict[str, Any]) -> None:
-        """
-        Check API version of qBT. A change introduced in 2.16.0
-        remove skip_checking to use seedMode instead
-        """
-        global _qbt_using_seedMode
-        try:
-            webapi_version_str = await self.retry_qbt_operation(
-                lambda: asyncio.to_thread(lambda: qbt_client.app.web_api_version),
-                "Check qBittorrent API Version"
-            )
-
-            if Version(webapi_version_str) < Version("2.16.0"):
-                if meta["debug"]:
-                    console.print(f"[yellow]qBittorrent API version ({webapi_version_str}) < 2.16.0, using skip_checking")
-                _qbt_using_seedMode = False
-            else:
-                if meta["debug"]:
-                    console.print(f"[yellow]qBittorrent API version ({webapi_version_str}) > 2.16.0, using seedMode")
-                _qbt_using_seedMode = True
-
-        except Exception as e:
-            console.print(f"[bold red]Can't check qBittorrent API version : {e}")
 
     @staticmethod
     def _resolve_src_and_save_path(
@@ -1012,7 +985,7 @@ class QbittorrentClientMixin:
             qbt_session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30), connector=aiohttp.TCPConnector(ssl=ssl_context))
             qbt_proxy_url = proxy_url.rstrip("/")
         else:
-            potential_qbt_client = await self.init_qbittorrent_client(client, meta)
+            potential_qbt_client = await self.init_qbittorrent_client(client)
             if not potential_qbt_client:
                 return
             else:
@@ -1101,19 +1074,16 @@ class QbittorrentClientMixin:
                 if qbt_session is None:
                     raise RuntimeError("qbt_session cannot be None")
                 if meta["debug"]:
-                    skip_or_seedmode = f"seedMode={str(skip_checking).lower()}" if _qbt_using_seedMode else f"skip_checking={str(skip_checking).lower()}"
                     console.print(
-                        f"[cyan]POSTing to {Redaction.redact_private_info(qbt_proxy_url)}/api/v2/torrents/add with data: savepath={save_path}, autoTMM={auto_management}, {skip_or_seedmode}, paused={paused_on_add}, contentLayout={content_layout}, category={qbt_category}, tags={tag}"
+                        f"[cyan]POSTing to {Redaction.redact_private_info(qbt_proxy_url)}/api/v2/torrents/add with data: savepath={save_path}, autoTMM={auto_management}, skip_checking={skip_checking}, seedMode={skip_checking}, paused={paused_on_add}, contentLayout={content_layout}, category={qbt_category}, tags={tag}"
                     )
 
                 async def _proxy_add() -> int:
                     fd = aiohttp.FormData()
                     fd.add_field("savepath", save_path)
                     fd.add_field("autoTMM", str(auto_management).lower())
-                    if _qbt_using_seedMode:
-                        fd.add_field("seedMode", str(skip_checking).lower())
-                    else:
-                        fd.add_field("skip_checking", str(skip_checking).lower())
+                    fd.add_field("skip_checking", str(skip_checking).lower())
+                    fd.add_field("seedMode", str(skip_checking).lower())  # qBT >= 5.3 (Web API 2.16.0) renamed skip_checking; send both, like qbittorrent-api
                     fd.add_field("paused", str(paused_on_add).lower())
                     fd.add_field("contentLayout", content_layout)
                     if qbt_category:
@@ -1621,7 +1591,7 @@ class QbittorrentClientMixin:
                         await qbt_session.close()
                     return []
             else:
-                potential_qbt_client = await self.init_qbittorrent_client(client_config, meta)
+                potential_qbt_client = await self.init_qbittorrent_client(client_config)
                 if not potential_qbt_client:
                     return []
                 else:
